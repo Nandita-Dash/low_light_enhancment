@@ -11,6 +11,8 @@ REF_CDF_PATH = BASE / "weights" / "reference_cdf.npy"
 MAX_SIDE = 768
 MAX_MATCH_SLOPE = 1.5  # max contrast gain of lightness matching
 DEFAULT_BRIGHTNESS = 0.6  # target mean lightness (0-1) of the enhanced image
+CHROMA_GAIN_POWER, CHROMA_GAIN_MAX = 0.75, 2.5  # demo stage: colour boost = brightness gain ** power, capped
+BLACK_PERCENTILE, MAX_BLACK_LIFT = 1.0, 0.08  # demo stage: darkest 1% back to black, by at most 0.08
 
 _model = None
 _model_checked = False
@@ -91,9 +93,12 @@ def demo_stage(img: np.ndarray, brightness: float = DEFAULT_BRIGHTNESS) -> np.nd
     lifted = 1 - np.power(1 - Lf, p)
     # Chroma shrinks with exposure, so scale it back up with the (smoothed) brightness gain
     gain = cv2.GaussianBlur(lifted, (0, 0), 3) / np.maximum(cv2.GaussianBlur(Lf, (0, 0), 3), 1e-3)
-    gain = np.clip(np.sqrt(gain), 1.0, 1.8)  # softened so strong lifts do not oversaturate
+    gain = np.clip(gain ** CHROMA_GAIN_POWER, 1.0, CHROMA_GAIN_MAX)  # softened so strong lifts do not oversaturate
     a = (128 + (a.astype(np.float32) - 128) * gain).clip(0, 255).astype(np.uint8)
     b = (128 + (b.astype(np.float32) - 128) * gain).clip(0, 255).astype(np.uint8)
+    # Black point: the lift raises the darkest pixels, so pull them back down
+    floor = min(float(np.percentile(lifted, BLACK_PERCENTILE)), MAX_BLACK_LIFT)
+    lifted = np.maximum(lifted - floor, 0) / (1 - floor)
     # White point: stretch so the brightest areas (paper, lit walls) reach near-white
     white = max(float(np.percentile(lifted, 99.5)), 1e-3)
     lifted = lifted * min(0.98 / white, 1.6)
@@ -171,11 +176,19 @@ def match_lightness(src: np.ndarray, ref_cdf: np.ndarray, strength: float = 1.0)
     L = lab[..., 0]
     src_cdf = np.cumsum(np.bincount(L.ravel(), minlength=256)) / L.size
     lut = np.interp(src_cdf, ref_cdf.mean(axis=1), np.arange(256))
-    # Cap the contrast gain so flat areas (sky, walls) do not get leftover noise stretched into blotches,
-    # then restore the mean brightness the full matching aimed for
-    steps = np.minimum(np.diff(lut), MAX_MATCH_SLOPE)
-    capped = np.concatenate([[lut[0]], lut[0] + np.cumsum(steps)])
-    capped += lut[L].mean() - capped[L].mean()
+    # Cap the contrast gain so flat areas (sky, walls) do not get leftover noise stretched into blotches.
+    # The cap applies only between levels the image uses: a jump across empty levels (e.g. below its
+    # darkest pixel) separates no pixels, so capping it would only leave the curve too low.
+    used = np.flatnonzero(np.bincount(L.ravel(), minlength=256))
+    steps = np.minimum(np.diff(lut[used]), MAX_MATCH_SLOPE * np.diff(used))
+    capped = np.interp(np.arange(256), used, np.concatenate([[lut[used[0]]], lut[used[0]] + np.cumsum(steps)]))
+    # Then restore the mean brightness the full matching aimed for with a gain anchored at the darkest level,
+    # not a constant offset: an offset lifts blacks to grey and fogs the whole image. The gain is limited
+    # so the brightest areas do not clip.
+    black, top = capped[used[0]], capped[int(np.percentile(L, 99.9))]
+    if capped[L].mean() > black and top > black:
+        gain = (lut[L].mean() - black) / (capped[L].mean() - black)
+        capped = black + (capped - black) * np.clip(gain, 1.0, max((250 - black) / (top - black), 1.0))
     capped = np.maximum(capped, np.arange(256))  # only brighten; never pull white paper or lights down to grey
     lab[..., 0] = np.clip(strength * capped[L] + (1 - strength) * L, 0, 255).astype(np.uint8)
     return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
@@ -212,7 +225,7 @@ def run_pipeline(img, ref_img=None, truth_img=None, use_matching=True, strength=
     stage1 = keep_color_balance(run_autoencoder(img) if using_model else demo_stage(img, brightness), img)
 
     final = stage1
-    if use_matching:
+    if use_matching and strength > 0:
         if ref_img is not None:
             final = match_histogram(stage1, channel_cdf(ref_img), strength)
         else:
