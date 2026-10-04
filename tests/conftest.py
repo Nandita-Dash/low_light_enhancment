@@ -9,6 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import enhance  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def clear_stage1_cache():
+    """Tests swap models in and out; a cached stage 1 from another test must not leak in."""
+    enhance._stage1_cache.clear()
+
+
 @pytest.fixture
 def dark_image():
     """Small noisy, dark RGB image with some structure."""

@@ -1,5 +1,7 @@
 flask>=3.0
 numpy
+pillow
+pillow-heif
 opencv-python
 scikit-image
 torch

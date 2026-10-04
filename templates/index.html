@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1c1e">
 <title>Low-light Image Enhancement</title>
 <style>
   :root {
@@ -10,22 +11,36 @@
     --accent:#d9a44a; --accent-text:#1c1c1e; --err:#e5686b;
   }
   * { box-sizing:border-box; }
-  html { color-scheme:dark; }
-  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+  html { color-scheme:dark; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); -webkit-tap-highlight-color:transparent;
+         padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
          font:14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   button, input { font:inherit; color:inherit; }
+  button, a, label, #drop { touch-action:manipulation; }
 
   /* ---------- layout ---------- */
-  header { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--line); }
+  header { display:flex; align-items:baseline; gap:4px 12px; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--line); }
   h1 { margin:0; font-size:16px; font-weight:600; }
   header p { margin:0; color:var(--muted); font-size:13px; }
   main { display:grid; grid-template-columns:300px minmax(0,1fr); min-height:calc(100vh - 50px); }
-  @media (max-width:860px) { main { grid-template-columns:minmax(0,1fr); } }
   aside { background:var(--panel); border-right:1px solid var(--line); }
-  @media (max-width:860px) { aside { border-right:0; border-bottom:1px solid var(--line); } }
   aside section { padding:16px 18px; border-bottom:1px solid var(--line); }
   h2 { margin:0 0 10px; font-size:12px; font-weight:600; color:var(--muted); }
   h2 span { font-weight:400; }
+  .viewer { padding:18px 20px 40px; min-width:0; }
+
+  /* Phones and narrow windows: one column, with the result straight after the image and the settings below it */
+  @media (max-width:860px) {
+    header { padding:12px 16px; }
+    main { grid-template-columns:minmax(0,1fr); min-height:0; }
+    aside { display:contents; }
+    aside section { background:var(--panel); padding:14px 16px; }
+    #secImage { order:1; }
+    .viewer { order:2; padding:14px 16px 18px; border-bottom:1px solid var(--line); }
+    #secSettings { order:3; }
+    #secOptional { order:4; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+    .empty-state { padding:20px 0 !important; }
+  }
 
   /* ---------- image input ---------- */
   #drop { border:1px dashed var(--line); border-radius:4px; padding:18px 12px; text-align:center; cursor:pointer; color:var(--muted); outline:none; }
@@ -35,13 +50,16 @@
   #drop.has .thumb { display:block; }
   #drop.has .empty { display:none; }
   #drop .thumb img { display:block; width:100%; height:150px; object-fit:cover; border-radius:3px 3px 0 0; }
+  #drop .thumb img.none { display:none; }
   #drop .meta { display:flex; justify-content:space-between; gap:8px; padding:6px 8px; font-size:12px; color:var(--muted); }
   #drop .meta span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+  .for-touch { display:none; }
+  @media (hover:none) and (pointer:coarse) { .for-touch { display:inline; } .for-mouse { display:none; } }
   .examples { margin-top:12px; }
   .examples p { margin:0 0 6px; font-size:12px; color:var(--muted); }
   .ex-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
   .ex { padding:0; border:1px solid var(--line); border-radius:3px; overflow:hidden; cursor:pointer; background:none; }
-  .ex img { display:block; width:100%; aspect-ratio:4/3; object-fit:cover; }
+  .ex img { display:block; width:100%; aspect-ratio:3/2; object-fit:cover; }
   .ex span { display:block; padding:3px 0; font-size:11.5px; color:var(--muted); }
   .ex:hover, .ex:focus-visible { border-color:var(--accent); outline:none; }
   .ex.loading { opacity:.5; pointer-events:none; }
@@ -77,43 +95,61 @@
   .hint { margin:10px 0 0; font-size:12px; color:var(--muted); }
   kbd { font:inherit; font-size:11px; padding:0 4px; border:1px solid var(--line); border-radius:3px; }
 
+  /* Touch screens: finger-sized targets (44 px or more) */
+  @media (pointer:coarse) {
+    .btn { padding:11px 16px; font-size:14px; }
+    #go { padding:13px; }
+    .tabs button { padding:11px 14px !important; }
+    .check { min-height:44px; }
+    .check input { width:22px; height:22px; }
+    .ctrl label { margin-bottom:8px; }
+    input[type=range] { height:28px; }
+    .file-row { min-height:54px; }
+    .file-row .choose, .file-row .x { font-size:14px; padding:10px 0 10px 12px; }
+    .ex span { padding:7px 0; font-size:12.5px; }
+    .hint { display:none; }
+  }
+
   /* ---------- viewer ---------- */
-  .viewer { padding:18px 20px 40px; min-width:0; }
   .empty-state { color:var(--muted); padding:60px 0; text-align:center; }
   .empty-state p { margin:0 auto; max-width:380px; }
   .processing { display:flex; flex-direction:column; align-items:center; gap:10px; color:var(--muted); }
   .processing img { display:block; max-width:100%; max-height:65vh; opacity:.5; }
+  .processing img.none { display:none; }
 
-  .toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
-  .tabs { display:inline-flex; border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+  .toolbar { display:flex; justify-content:space-between; align-items:center; gap:8px 12px; flex-wrap:wrap; margin-bottom:10px; }
+  .tabs { display:inline-flex; border:1px solid var(--line); border-radius:4px; overflow:hidden; max-width:100%; }
   .tabs button { border:0; background:none; padding:6px 12px; cursor:pointer; color:var(--muted); font-size:13px; }
   .tabs button + button { border-left:1px solid var(--line); }
   .tabs button[aria-pressed=true] { background:var(--raised); color:var(--text); }
   .updating-note { display:none; font-size:12px; color:var(--muted); }
   .updating-note.show { display:inline; }
 
-  .cmp { position:relative; width:100%; overflow:hidden; user-select:none; display:flex; }
+  .cmp { position:relative; width:100%; overflow:hidden; user-select:none; -webkit-user-select:none; display:flex; }
   /* never upscale past the image's own width, and keep it within the window height */
-  .stage { position:relative; width:min(100%, var(--nw, 100%), calc(70vh * var(--ar, 1.5))); }
-  .cmp img { display:block; width:100%; -webkit-user-drag:none; }
+  .stage { position:relative; width:min(100%, var(--nw, 100%), calc(70vh * var(--ar, 1.5)));
+           cursor:ew-resize; touch-action:pan-y; -webkit-touch-callout:none; }
+  .cmp img { display:block; width:100%; -webkit-user-drag:none; pointer-events:none; }
   .cmp.updating #imgBottom { opacity:.7; }
   .cmp .top { position:absolute; inset:0; clip-path:inset(0 50% 0 0); }
   .cmp .handle { position:absolute; top:0; bottom:0; left:50%; width:1px; background:#fff; pointer-events:none; }
-  .cmp .knob { position:absolute; top:50%; left:50%; width:28px; height:28px; margin:-14px; border-radius:50%; pointer-events:none;
-               display:grid; place-items:center; background:#fff; color:#111; font-size:12px; font-weight:700; }
-  .cmp input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:ew-resize; margin:0; }
+  .cmp .knob { position:absolute; top:50%; left:50%; width:32px; height:32px; margin:-16px; border-radius:50%; pointer-events:none;
+               display:grid; place-items:center; background:#fff; color:#111; font-size:13px; font-weight:700; }
+  .stage:focus-within .knob { outline:2px solid var(--accent); outline-offset:2px; }
+  /* kept for keyboard use (arrow keys); touch and mouse drag the image itself */
+  .cmp #slider { position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; margin:0; pointer-events:none; }
   .tag { position:absolute; top:8px; font-size:12px; padding:2px 6px; border-radius:3px; pointer-events:none; background:rgba(0,0,0,.6); }
   .tag.l { left:8px; } .tag.r { right:8px; }
   .actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-  .cmp:fullscreen, .cmp.fs { width:100vw; height:100vh; margin:0; align-items:center; justify-content:center; background:#000; }
+  .cmp:fullscreen, .cmp.fs { width:100vw; height:100vh; height:100dvh; margin:0; align-items:center; justify-content:center; background:#000; }
   .cmp.fs { position:fixed; inset:0; z-index:100; }
-  .cmp:fullscreen .stage, .cmp.fs .stage { width:min(100vw, calc(100vh * var(--ar, 1.5))); }
-  .fs-exit { display:none !important; position:absolute; right:16px; bottom:16px; z-index:3; }
+  .cmp:fullscreen .stage, .cmp.fs .stage { width:min(100vw, calc(100vh * var(--ar, 1.5))); width:min(100vw, calc(100dvh * var(--ar, 1.5))); }
+  .fs-exit { display:none !important; position:absolute; right:calc(16px + env(safe-area-inset-right)); bottom:calc(16px + env(safe-area-inset-bottom)); z-index:3; }
   .cmp:fullscreen .fs-exit, .cmp.fs .fs-exit { display:inline-flex !important; }
 
   /* ---------- measurements ---------- */
   .measure { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:28px; margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
-  @media (max-width:1100px) { .measure { grid-template-columns:minmax(0,1fr); } }
+  @media (max-width:1100px) { .measure { grid-template-columns:minmax(0,1fr); gap:20px; } }
   canvas { width:100%; height:180px; display:block; }
   .legend { display:flex; gap:14px; font-size:12px; color:var(--muted); margin-top:6px; }
   .legend i { display:inline-block; width:10px; height:2px; margin-right:5px; vertical-align:middle; }
@@ -123,13 +159,14 @@
   th:first-child, td:first-child { text-align:left; padding-left:0; }
   th { color:var(--muted); font-weight:400; font-size:12px; }
   td.best { font-weight:600; }
+  @media (max-width:420px) { table { font-size:13px; } th, td { padding:6px 4px; } }
   .note { font-size:12px; color:var(--muted); margin-top:8px; }
 
   .drop-overlay { position:fixed; inset:0; z-index:200; display:grid; place-items:center; background:rgba(0,0,0,.6);
                   opacity:0; pointer-events:none; font-size:16px; }
   .drop-overlay.show { opacity:1; }
-  .toast { position:fixed; left:50%; bottom:20px; z-index:300; transform:translateX(-50%); display:none; padding:9px 14px; border-radius:4px;
-           background:var(--raised); border:1px solid var(--err); max-width:calc(100vw - 32px); }
+  .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:300; transform:translateX(-50%); display:none;
+           padding:9px 14px; border-radius:4px; background:var(--raised); border:1px solid var(--err); width:max-content; max-width:calc(100vw - 32px); }
   .toast.show { display:block; }
   .hidden { display:none !important; }
 </style>
@@ -142,16 +179,19 @@
 
 <main>
   <aside>
-    <section>
+    <section id="secImage">
       <h2>Image</h2>
       <div id="drop" tabindex="0" role="button" aria-label="Choose a low-light image">
-        <div class="empty">Drop a photo here or click to choose.<br>You can also paste one.</div>
+        <div class="empty">
+          <span class="for-mouse">Drop a photo here or click to choose.<br>You can also paste one.</span>
+          <span class="for-touch">Tap to choose a photo or take one.</span>
+        </div>
         <div class="thumb">
           <img id="thumb" alt="Selected image">
           <div class="meta"><span id="fname"></span><span id="fsize"></span></div>
         </div>
       </div>
-      <input id="file" type="file" accept="image/*" hidden>
+      <input id="file" type="file" accept="image/*,.heic,.heif" hidden>
       <div class="examples">
         <p>Or use a real low-light photo from the LOL test set (loads its normal-exposure shot as ground truth):</p>
         <div class="ex-row">
@@ -162,7 +202,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="secSettings">
       <h2>Settings <span>(applied as you change them)</span></h2>
       <div class="ctrl" id="brightnessCtrl">
         <label for="brightness">Brightness <output id="bv">0.60</output></label>
@@ -175,19 +215,19 @@
       </div>
     </section>
 
-    <section>
+    <section id="secOptional">
       <h2>Optional</h2>
       <label class="file-row" id="refChip">
         <span class="ct">Reference image<small id="refName">Match its colours and tones</small></span>
         <span class="choose">Choose</span>
         <button class="x" type="button">Remove</button>
-        <input id="ref" type="file" accept="image/*" hidden>
+        <input id="ref" type="file" accept="image/*,.heic,.heif" hidden>
       </label>
       <label class="file-row" id="truthChip">
         <span class="ct">Ground truth<small id="truthName">Well-lit version, for PSNR and SSIM</small></span>
         <span class="choose">Choose</span>
         <button class="x" type="button">Remove</button>
-        <input id="truth" type="file" accept="image/*" hidden>
+        <input id="truth" type="file" accept="image/*,.heic,.heif" hidden>
       </label>
       <button id="go" class="btn primary" disabled><span id="goText">Enhance</span></button>
       <p class="hint"><kbd>F</kbd> full screen, <kbd>←</kbd> <kbd>→</kbd> move the divider</p>
@@ -196,7 +236,7 @@
 
   <section class="viewer">
     <div class="empty-state" id="emptyState">
-      <p>Choose a low-light photo or an example on the left. The result is shown next to the original, with a histogram and quality measurements below.</p>
+      <p>Choose a low-light photo or one of the examples. The result is shown next to the original, with a histogram and quality measurements below.</p>
     </div>
 
     <div class="processing hidden" id="procCard">
@@ -210,19 +250,20 @@
         <span class="updating-note" id="liveChip">Updating…</span>
       </div>
       <div class="cmp" id="cmp">
-        <div class="stage">
+        <div class="stage" id="stage">
           <img id="imgBottom" alt="Enhanced">
           <div class="top"><img id="imgTop" alt="Original"></div>
           <div class="handle"></div>
           <div class="knob" aria-hidden="true">↔</div>
           <span class="tag l">Original</span>
           <span class="tag r">Enhanced</span>
-          <input id="slider" type="range" min="0" max="100" step="0.1" value="50" aria-label="Before / after divider">
+          <input id="slider" type="range" min="0" max="100" step="1" value="50" aria-label="Before / after divider">
         </div>
         <button class="btn fs-exit" id="fsExit" type="button">Exit full screen</button>
       </div>
       <div class="actions">
         <a class="btn primary" id="dl" download="enhanced.png">Download</a>
+        <button class="btn hidden" id="shareBtn" type="button">Share / Save</button>
         <button class="btn" id="fsBtn" type="button">Full screen</button>
       </div>
 
@@ -254,8 +295,34 @@ function toast(msg) {
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 4500);
 }
 const fmtSize = b => b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
+// HEIC photos from phones may arrive with an empty type, so go by the name as well
+const isImage = f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name || '');
 
-/* ---------- file input: click, drop (zone or whole page), paste ---------- */
+/* ---------- uploads: shrink big photos in the browser before sending ----------
+   The server works at 768 px at most, so a 12 MP phone photo (3-5 MB) is cut down to 1536 px (a few hundred KB),
+   which matters on mobile data. Drawing through an <img> applies the EXIF orientation. Small files and anything
+   the browser cannot decode (e.g. HEIC outside Safari) are sent unchanged; the server handles those. */
+const MAX_UPLOAD_SIDE = 1536, prepared = new WeakMap();
+function prepare(f) {
+  if (!prepared.has(f)) prepared.set(f, shrink(f));
+  return prepared.get(f);
+}
+async function shrink(f) {
+  const url = URL.createObjectURL(f);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    const s = MAX_UPLOAD_SIDE / Math.max(img.naturalWidth, img.naturalHeight);
+    if (s >= 1) return f;
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+    return blob ? new File([blob], (f.name || 'photo').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : f;
+  } catch { return f; }
+  finally { URL.revokeObjectURL(url); }
+}
+
+/* ---------- file input: click or tap, drop (zone or whole page), paste ---------- */
 const drop = $('drop'), file = $('file');
 drop.onclick = () => file.click();
 drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } };
@@ -273,10 +340,15 @@ addEventListener('paste', e => {
   const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
   if (item) setFile(item.getAsFile());
 });
+// previews of formats the browser cannot show (HEIC outside Safari) are hidden instead of showing a broken image
+['thumb', 'procImg'].forEach(id => {
+  $(id).onerror = () => $(id).classList.add('none');
+  $(id).onload = () => $(id).classList.remove('none');
+});
 let exampleTruth = false;  // ground truth was filled in by an example, so it does not belong to other images
 function setFile(f, fromExample = false) {
   if (!f) return;
-  if (!f.type.startsWith('image/')) { toast('Please choose an image file.'); return; }
+  if (!isImage(f)) { toast('Please choose an image file.'); return; }
   if (exampleTruth && !fromExample) { $('truth').value = ''; syncChip('truth'); }
   exampleTruth = fromExample;
   imageFile = f;
@@ -349,36 +421,47 @@ function showProcessing(on) {
 
 $('go').onclick = () => run(true);
 
+// A new image cancels the request in flight. Setting changes do not: on a slow server, cancelled requests keep
+// computing and pile up, so while one is running further changes wait and only the latest is sent after it.
+let busy = false, again = false;
 async function run(fresh) {
   if (!imageFile) return;
+  if (!fresh && busy) { again = true; return; }
   if (controller) controller.abort();
   const mine = controller = new AbortController();
-  const fd = new FormData();
-  fd.append('image', imageFile);
-  fd.append('matching', $('matching').checked ? '1' : '0');
-  fd.append('strength', $('strength').value);
-  fd.append('brightness', $('brightness').value);
-  if ($('ref').files[0]) fd.append('reference', $('ref').files[0]);
-  if ($('truth').files[0]) fd.append('truth', $('truth').files[0]);
+  busy = true; again = false;
 
   $('go').disabled = true; $('goText').textContent = 'Enhancing…';
   if (fresh || !data) showProcessing(true);
   else { $('liveChip').classList.add('show'); $('cmp').classList.add('updating'); }
 
   try {
+    const fd = new FormData();
+    const img = await prepare(imageFile);
+    fd.append('image', img, img.name || 'image');
+    fd.append('matching', $('matching').checked ? '1' : '0');
+    fd.append('strength', $('strength').value);
+    fd.append('brightness', $('brightness').value);
+    for (const [id, field] of [['ref', 'reference'], ['truth', 'truth']]) {
+      const f = $(id).files[0];
+      if (f) { const p = await prepare(f); fd.append(field, p, p.name || field); }
+    }
+    if (mine !== controller) return;   // a newer image was chosen meanwhile
     const r = await fetch('/api/enhance', { method: 'POST', body: fd, signal: mine.signal });
-    const j = await r.json();
+    const j = await r.json().catch(() => ({ error: r.status === 413 ? 'That file is too large (25 MB at most).' : `Server error (${r.status})` }));
     if (!r.ok) throw new Error(j.error || 'Something went wrong');
     data = j; render(fresh);
   } catch (e) {
-    if (e.name === 'AbortError') return;   // superseded by a newer request
-    toast(/fetch|network/i.test(e.message) ? 'Cannot reach the server. Is "python app.py" running?' : e.message);
+    if (e.name === 'AbortError') return;   // superseded by a newer image
+    toast(/fetch|network|load failed/i.test(e.message) ? 'Cannot reach the server. Check your connection and try again.' : e.message);
     showProcessing(false);
     $(data ? 'results' : 'emptyState').classList.remove('hidden');
   }
   if (mine !== controller) return;
+  busy = false;
   $('go').disabled = false; $('goText').textContent = 'Enhance again';
   $('liveChip').classList.remove('show'); $('cmp').classList.remove('updating');
+  if (again) { again = false; run(false); }
 }
 
 /* ---------- results ---------- */
@@ -396,21 +479,37 @@ function render(fresh) {
   $('results').classList.remove('hidden');
   if (fresh) {
     setSplit(50);
-    // on narrow screens the result sits below the settings
-    if (matchMedia('(max-width:860px)').matches) $('results').scrollIntoView({ block: 'start' });
+    // on narrow screens the result sits below the image box
+    if (matchMedia('(max-width:860px)').matches) $('results').scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
   $('imgTop').src = data.images.original;
   showStage();
   drawHist(); drawTable();
 }
-function showStage() {
-  $('tabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === stage));
-  $('imgBottom').src = data.images[stage];
-  $('dl').href = data.images[stage]; $('dl').download = `enhanced_${stage}.png`;
-}
 
-/* compare slider */
-const slider = $('slider'), cmp = $('cmp');
+// Download and share use a file rather than the data URL: iOS Safari handles those far more reliably.
+// The file is ready before the tap, since the share sheet must open straight from the tap.
+let resultUrl = null, resultFile = null;
+const canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] }));
+async function showStage() {
+  $('tabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === stage));
+  const src = data.images[stage];
+  $('imgBottom').src = src;
+  const name = `enhanced_${stage}.png`;
+  $('dl').download = name; $('dl').href = src;
+  const blob = await (await fetch(src)).blob();
+  if (data.images[stage] !== src) return;   // changed again meanwhile
+  if (resultUrl) URL.revokeObjectURL(resultUrl);
+  resultUrl = URL.createObjectURL(blob); $('dl').href = resultUrl;
+  resultFile = new File([blob], name, { type: 'image/png' });
+  $('shareBtn').classList.toggle('hidden', !canShareFiles);
+}
+$('shareBtn').onclick = () => {
+  if (resultFile) navigator.share({ files: [resultFile], title: 'Enhanced photo' }).catch(() => {});
+};
+
+/* compare: drag anywhere on the image with mouse, finger or pen; arrow keys via the hidden range input */
+const slider = $('slider'), cmp = $('cmp'), stageEl = $('stage');
 function setSplit(v) {
   slider.value = v;
   cmp.querySelector('.top').style.clipPath = `inset(0 ${100 - v}% 0 0)`;
@@ -420,6 +519,28 @@ function setSplit(v) {
   cmp.querySelector('.tag.r').style.opacity = v > 88 ? 0 : 1;
 }
 slider.oninput = () => setSplit(+slider.value);
+// A mouse moves the divider straight away. A touch may be the start of a page scroll, so it only moves the
+// divider once it has clearly gone sideways; a mostly vertical touch is left to scroll the page.
+let drag = null;   // null, or { x, y, active }
+const splitAt = e => { const r = stageEl.getBoundingClientRect(); setSplit(Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100))); };
+stageEl.addEventListener('pointerdown', e => {
+  if (e.button > 0) return;
+  const mouse = e.pointerType === 'mouse';
+  drag = { x: e.clientX, y: e.clientY, active: mouse };
+  if (mouse) { stageEl.setPointerCapture(e.pointerId); splitAt(e); }
+});
+stageEl.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (!drag.active) {
+    const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+    if (dy > 8 && dy >= dx) { drag = null; return; }   // vertical: a scroll
+    if (dx < 8) return;                                 // not decided yet
+    drag.active = true; stageEl.setPointerCapture(e.pointerId);
+  }
+  splitAt(e);
+});
+['pointerup', 'pointercancel'].forEach(t => stageEl.addEventListener(t, () => { drag = null; }));
+stageEl.addEventListener('dblclick', () => toggleFull());
 setSplit(50);
 $('imgBottom').addEventListener('load', e => {
   cmp.style.setProperty('--ar', e.target.naturalWidth / e.target.naturalHeight);
@@ -434,9 +555,8 @@ function toggleFull() {
   else cmp.classList.add('fs');  // browsers without the Fullscreen API (e.g. iPhone Safari)
 }
 $('fsBtn').onclick = toggleFull; $('fsExit').onclick = toggleFull;
-slider.ondblclick = toggleFull;
 addEventListener('keydown', e => {
-  if (e.target.matches('aside input')) return;
+  if (e.target.matches('aside input') || e.target === slider) return;
   if (e.key === 'Escape' && cmp.classList.contains('fs')) cmp.classList.remove('fs');
   if (!data || $('results').classList.contains('hidden')) return;
   if (e.key === 'f' || e.key === 'F') toggleFull();
@@ -470,11 +590,11 @@ function drawTable() {
     const vals = cols.map(get), top = best ? Math.max(...vals) : null;
     return `<tr><td>${label}</td>${vals.map(v => `<td class="${v === top ? 'best' : ''}">${v}</td>`).join('')}</tr>`;
   };
-  $('stats').innerHTML = `<tr><th></th><th>Original</th><th>Autoencoder</th><th>Final</th></tr>`
+  $('stats').innerHTML = `<tr><th></th><th>Original</th><th>Stage 1</th><th>Final</th></tr>`
     + row('Mean brightness', k => s[k].brightness) + row('Contrast (σ)', k => s[k].contrast)
     + (m ? row('PSNR (dB)', k => m[k].psnr, true) + row('SSIM', k => m[k].ssim, true) : '');
   let note = m ? '' : '<div class="note">Add the well-lit version as ground truth to see PSNR and SSIM.</div>';
-  if (data.mode === 'demo') note += '<div class="note">Demo mode: no trained weights found, so the first stage is a simple denoise and brightness lift instead of the autoencoder.</div>';
+  if (data.mode === 'demo') note += '<div class="note">Demo mode: no trained weights found, so stage 1 is a simple denoise and brightness lift instead of the autoencoder.</div>';
   $('metricsWrap').innerHTML = note;
 }
 </script>

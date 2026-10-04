@@ -1,4 +1,7 @@
 """Enhancement pipeline: autoencoder -> histogram matching -> metrics."""
+import hashlib
+import threading
+from collections import OrderedDict
 from pathlib import Path
 
 import cv2
@@ -16,6 +19,9 @@ BLACK_PERCENTILE, MAX_BLACK_LIFT = 1.0, 0.08  # demo stage: darkest 1% back to b
 
 _model = None
 _model_checked = False
+# Stage 1 dominates the run time; matching strength, matching on/off and the ground truth do not affect it,
+# so the last few results are kept and reused when only those change.
+_stage1_cache, _stage1_lock, STAGE1_CACHE_SIZE = OrderedDict(), threading.Lock(), 4
 
 
 def get_model():
@@ -40,10 +46,22 @@ def get_model():
 
 
 def decode_image(data: bytes) -> np.ndarray:
+    """Decode an upload to RGB, turned upright from its EXIF orientation (phone photos are often stored sideways).
+    OpenCV covers JPEG, PNG, WebP and more; Pillow with pillow-heif covers iPhone HEIC/HEIF photos."""
     arr = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-    if arr is None:
-        raise ValueError("Could not read the image file")
-    return cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+    if arr is not None:
+        return cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+    try:
+        import io
+
+        import pillow_heif
+        from PIL import Image, ImageOps
+
+        pillow_heif.register_heif_opener()
+        with Image.open(io.BytesIO(data)) as im:
+            return np.asarray(ImageOps.exif_transpose(im).convert("RGB"))
+    except Exception:  # not an image, or the optional decoders are not installed
+        raise ValueError("Could not read the image file. Use a JPEG, PNG, WebP or HEIC photo.") from None
 
 
 def limit_size(img: np.ndarray, max_side: int = MAX_SIDE) -> np.ndarray:
@@ -83,7 +101,7 @@ def demo_stage(img: np.ndarray, brightness: float = DEFAULT_BRIGHTNESS) -> np.nd
     The lift curve 1 - (1 - L)^p has a finite slope at black, so near-black pixels are not blown into blotches."""
     sigma = noise_sigma(img)
     L, a, b = cv2.split(cv2.cvtColor(img, cv2.COLOR_RGB2LAB))
-    L = cv2.fastNlMeansDenoising(L, None, float(np.clip(sigma, 3, 25)), 7, 35)
+    L = cv2.fastNlMeansDenoising(L, None, float(np.clip(sigma, 3, 25)), 7, 21)
     if sigma > 4:
         a = cv2.bilateralFilter(cv2.GaussianBlur(a, (0, 0), 2), 9, 20, 9)
         b = cv2.bilateralFilter(cv2.GaussianBlur(b, (0, 0), 2), 9, 20, 9)
@@ -214,6 +232,23 @@ def compare(a: np.ndarray, b: np.ndarray) -> dict:
     }
 
 
+def first_stage(img: np.ndarray, brightness: float, using_model: bool) -> np.ndarray:
+    """Autoencoder (or the demo stand-in) plus colour balance, cached by image content and settings.
+    Brightness only affects the demo stand-in, so it is left out of the key with the model."""
+    key = (hashlib.sha1(img.tobytes()).hexdigest(), img.shape, using_model, None if using_model else brightness)
+    with _stage1_lock:
+        if key in _stage1_cache:
+            _stage1_cache.move_to_end(key)
+            return _stage1_cache[key]
+    out = keep_color_balance(run_autoencoder(img) if using_model else demo_stage(img, brightness), img)
+    out.flags.writeable = False  # shared between requests
+    with _stage1_lock:
+        _stage1_cache[key] = out
+        while len(_stage1_cache) > STAGE1_CACHE_SIZE:
+            _stage1_cache.popitem(last=False)
+    return out
+
+
 def run_pipeline(img, ref_img=None, truth_img=None, use_matching=True, strength=1.0,
                  brightness=DEFAULT_BRIGHTNESS):
     if not (np.isfinite(strength) and np.isfinite(brightness)):
@@ -222,7 +257,7 @@ def run_pipeline(img, ref_img=None, truth_img=None, use_matching=True, strength=
     brightness = float(np.clip(brightness, 0.3, 0.8))
     img = limit_size(img)
     using_model = get_model() is not None
-    stage1 = keep_color_balance(run_autoencoder(img) if using_model else demo_stage(img, brightness), img)
+    stage1 = first_stage(img, brightness, using_model)
 
     final = stage1
     if use_matching and strength > 0:

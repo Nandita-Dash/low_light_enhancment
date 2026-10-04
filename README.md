@@ -4,6 +4,9 @@ Project A042. A web app that takes an underexposed photo and returns an enhanced
 autoencoder brightens and denoises it, then histogram matching refines the tones. The result is shown next to
 the original with a before/after slider, a luminance histogram, and PSNR / SSIM when a ground-truth image is given.
 
+**Live demo: https://low-light-enhancment.onrender.com** (free hosting: the first visit after a quiet spell takes
+about a minute to wake the server). Works on phones as well as desktop.
+
 ![Low-light capture and enhanced result](static/examples/kitchen_compare.jpg)
 
 > **Status:** the trained weights are not included, so the app runs in **demo mode**: a classical
@@ -37,9 +40,9 @@ Three of the better results, also available as one-click examples in the app:
 
 | | |
 |---|---|
-| ![Kitchen](static/examples/kitchen_compare.jpg) | **Kitchen**<br>PSNR 5.1 → 17.9 dB<br>SSIM 0.20 → 0.70 |
-| ![Window](static/examples/window_compare.jpg) | **Window**<br>PSNR 5.6 → 17.6 dB<br>SSIM 0.19 → 0.67 |
-| ![Bowling alley](static/examples/bowling_compare.jpg) | **Bowling alley**<br>PSNR 6.8 → 18.9 dB<br>SSIM 0.19 → 0.67 |
+| ![Kitchen](static/examples/kitchen_compare.jpg) | **Kitchen**<br>PSNR 5.1 → 18.2 dB<br>SSIM 0.20 → 0.71 |
+| ![Window](static/examples/window_compare.jpg) | **Window**<br>PSNR 5.6 → 17.7 dB<br>SSIM 0.19 → 0.68 |
+| ![Bowling alley](static/examples/bowling_compare.jpg) | **Bowling alley**<br>PSNR 6.8 → 19.1 dB<br>SSIM 0.19 → 0.67 |
 
 **Limitations of demo mode.** On the darkest captures (average level below about 10/255) it loses most of the
 colour, smooths heavy noise into flat patches, and shows banding on smooth surfaces, because only a few brightness
@@ -61,6 +64,17 @@ levels survive in an 8-bit image that dark. Recovering those is the job of the t
      the target brightness and matched on lightness only, so the image keeps its own colours. The contrast gain is
      capped so leftover noise is not stretched into blotches, the black point is kept, and it never darkens.
 4. **Measurements:** mean brightness and contrast for each stage, plus PSNR and SSIM against the ground truth.
+
+Stage 1 takes most of the time, so the last few results are cached: changing the matching strength, switching
+matching on or off, or adding a ground truth reuses it. While a request is running, further setting changes wait
+and only the latest is sent, so a slow server does not pile up work.
+
+### On phones
+The layout becomes one column with the result right after the image. Tap the image box to pick a photo or take
+one; drag sideways on the result to move the divider (vertical swipes scroll the page); **Share / Save** opens the
+share sheet, where "Save Image" puts the result in Photos. Large photos are scaled down to 1536 px in the browser
+before upload (the server works at 768 px), so a 3–5 MB phone photo is sent as a few hundred KB. iPhone HEIC
+photos are supported, and photos taken in portrait are turned upright from their EXIF orientation.
 
 ### Controls
 - **Brightness** (0.3–0.8, default 0.6): target mean lightness. With trained weights it acts through the default
@@ -102,12 +116,16 @@ URLs), `hist`, `stats` and, with a ground truth, `metrics`. `GET /api/status` re
 
 ## Deployment
 The `Dockerfile` serves demo mode with gunicorn. It installs `requirements-web.txt` (no PyTorch), so it fits a
-small free instance. It listens on `$PORT` (default 8000):
+small free instance (about 120 MB of memory in use). It listens on `$PORT` (default 8000):
 
 ```
 docker build -t low-light .
 docker run -p 8000:8000 low-light
 ```
+
+**Render** (how the live demo is hosted): New → Web Service → Public Git Repository → this repo's URL, language
+Docker, branch `main`, instance type Free. A service deployed from a public URL does not redeploy on push; use
+Manual Deploy → Deploy latest commit. On the free tier a request takes several seconds rather than about one.
 
 Running `python app.py` directly is for local use. The Flask debugger is off unless `FLASK_DEBUG=1`, and `HOST` and
 `PORT` set the address.
@@ -130,7 +148,7 @@ train.py              training on LOL
 make_examples.py      builds static/examples/ from the LOL test set
 templates/index.html  frontend
 static/examples/      example low-light captures, ground truths, before/after images
-tests/                pytest suite
+tests/                pytest suite (tests/data: a small HEIC file)
 Dockerfile            container for hosting (demo mode)
 ```
 
