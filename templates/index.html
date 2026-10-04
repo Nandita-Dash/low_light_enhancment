@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Low-light Image Enhancer</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --muted:#8b93a7; --accent:#f5b942; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:28px 20px 8px; max-width:1100px; margin:auto; }
+  h1 { margin:0 0 4px; font-size:26px; }
+  header p { margin:0; color:var(--muted); }
+  main { max-width:1100px; margin:auto; padding:16px 20px 60px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .badge { display:inline-block; font-size:12px; padding:3px 9px; border-radius:99px; border:1px solid var(--line); color:var(--muted); margin-left:8px; vertical-align:middle; font-weight:400; }
+  .badge.demo { color:var(--accent); border-color:var(--accent); }
+  #drop { border:2px dashed var(--line); border-radius:12px; padding:34px; text-align:center; color:var(--muted); cursor:pointer; }
+  #drop.over { border-color:var(--accent); color:var(--text); }
+  .row { display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin-top:14px; }
+  label { font-size:14px; color:var(--muted); }
+  input[type=range] { vertical-align:middle; }
+  button { background:var(--accent); color:#1a1405; border:0; padding:10px 18px; border-radius:9px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:default; }
+  #results { display:none; gap:16px; }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .tabs button { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:500; padding:7px 14px; }
+  .tabs button.on { color:var(--text); border-color:var(--accent); }
+  .cmp { position:relative; width:100%; max-width:760px; margin:auto; overflow:hidden; border-radius:10px; user-select:none; }
+  .cmp img { display:block; width:100%; }
+  .cmp .top { position:absolute; inset:0; clip-path:inset(0 50% 0 0); }
+  .cmp .handle { position:absolute; top:0; bottom:0; left:50%; width:2px; background:var(--accent); pointer-events:none; }
+  .cmp input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:ew-resize; margin:0; }
+  .tag { position:absolute; top:8px; font-size:12px; background:#000a; padding:3px 8px; border-radius:6px; pointer-events:none; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:8px; }
+  th, td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; }
+  canvas { width:100%; height:200px; margin-top:8px; }
+  #err { color:#ff7b7b; margin-top:10px; }
+  .note { font-size:13px; color:var(--muted); margin-top:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Low-light Image Enhancer <span id="mode" class="badge"></span></h1>
+  <p>Autoencoder for noise reduction and brightening, followed by histogram matching for contrast.</p>
+</header>
+<main>
+  <section class="card">
+    <div id="drop">Drop a low-light image here or click to choose</div>
+    <input id="file" type="file" accept="image/*" hidden>
+    <div class="row">
+      <label><input id="matching" type="checkbox" checked> Histogram matching</label>
+      <label>Strength <input id="strength" type="range" min="0" max="1" step="0.05" value="1"> <span id="sv">1.00</span></label>
+      <label>Brightness <input id="brightness" type="range" min="0.3" max="0.8" step="0.05" value="0.6"> <span id="bv">0.60</span></label>
+    </div>
+    <div class="row">
+      <label>Reference image (optional) <input id="ref" type="file" accept="image/*"></label>
+      <label>Ground truth for PSNR/SSIM (optional) <input id="truth" type="file" accept="image/*"></label>
+    </div>
+    <div class="row">
+      <button id="go" disabled>Enhance</button>
+      <span id="fname" class="note" style="margin:0"></span>
+    </div>
+    <div id="err"></div>
+  </section>
+
+  <section id="results">
+    <div class="card">
+      <div class="tabs" id="tabs"></div>
+      <div class="cmp" id="cmp">
+        <img id="imgBottom" alt="Enhanced">
+        <div class="top"><img id="imgTop" alt="Original"></div>
+        <div class="handle"></div>
+        <span class="tag" style="left:8px">Original</span>
+        <span class="tag" style="right:8px">Enhanced</span>
+        <input id="slider" type="range" min="0" max="100" value="50">
+      </div>
+      <div class="row" style="justify-content:center">
+        <a id="dl" download="enhanced.png"><button class="ghost">Download enhanced image</button></a>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card"><b>Luminance histogram</b><canvas id="hist" width="560" height="200"></canvas>
+        <div class="note">Grey: original. Gold: enhanced.</div></div>
+      <div class="card"><b>Image statistics</b><table id="stats"></table>
+        <div id="metricsWrap"></div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let imageFile = null, data = null, stage = 'final';
+
+fetch('/api/status').then(r => r.json()).then(s => {
+  const m = $('mode');
+  if (s.mode === 'autoencoder') { m.textContent = 'trained autoencoder'; }
+  else { m.textContent = 'demo mode: no trained weights found'; m.classList.add('demo'); }
+});
+
+const drop = $('drop'), file = $('file');
+drop.onclick = () => file.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); setFile(e.dataTransfer.files[0]); };
+file.onchange = () => setFile(file.files[0]);
+function setFile(f) {
+  if (!f) return;
+  imageFile = f; $('fname').textContent = f.name; $('go').disabled = false;
+}
+$('strength').oninput = e => $('sv').textContent = (+e.target.value).toFixed(2);
+$('brightness').oninput = e => $('bv').textContent = (+e.target.value).toFixed(2);
+
+$('go').onclick = async () => {
+  $('err').textContent = ''; $('go').disabled = true; $('go').textContent = 'Working...';
+  const fd = new FormData();
+  fd.append('image', imageFile);
+  fd.append('matching', $('matching').checked ? '1' : '0');
+  fd.append('strength', $('strength').value);
+  fd.append('brightness', $('brightness').value);
+  if ($('ref').files[0]) fd.append('reference', $('ref').files[0]);
+  if ($('truth').files[0]) fd.append('truth', $('truth').files[0]);
+  try {
+    const r = await fetch('/api/enhance', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Something went wrong');
+    data = j; render();
+  } catch (e) { $('err').textContent = e.message; }
+  $('go').disabled = false; $('go').textContent = 'Enhance';
+};
+
+const LABELS = { final: 'Autoencoder + histogram matching', autoencoder: 'Autoencoder only' };
+function render() {
+  $('results').style.display = 'grid';
+  const tabs = $('tabs'); tabs.innerHTML = '';
+  Object.keys(LABELS).forEach(k => {
+    const b = document.createElement('button');
+    b.textContent = LABELS[k]; b.className = k === stage ? 'on' : '';
+    b.onclick = () => { stage = k; render(); };
+    tabs.appendChild(b);
+  });
+  $('imgBottom').src = data.images[stage];
+  $('imgTop').src = data.images.original;
+  $('dl').href = data.images[stage];
+  drawHist(); drawStats();
+}
+
+$('slider').oninput = e => {
+  const v = e.target.value;
+  document.querySelector('.cmp .top').style.clipPath = `inset(0 ${100 - v}% 0 0)`;
+  document.querySelector('.cmp .handle').style.left = v + '%';
+};
+
+function drawHist() {
+  const c = $('hist'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const a = data.hist.original, b = data.hist.final;
+  const max = Math.max(...a, ...b), n = a.length, w = c.width / n;
+  [[a, '#8b93a7aa'], [b, '#f5b942aa']].forEach(([arr, col]) => {
+    g.fillStyle = col;
+    arr.forEach((v, i) => { const h = v / max * (c.height - 6); g.fillRect(i * w, c.height - h, w - 1, h); });
+  });
+}
+
+function drawStats() {
+  const s = data.stats, m = data.metrics;
+  $('stats').innerHTML = `<tr><th></th><th>Original</th><th>Autoencoder</th><th>Final</th></tr>
+    <tr><td>Mean brightness</td><td>${s.original.brightness}</td><td>${s.autoencoder.brightness}</td><td>${s.final.brightness}</td></tr>
+    <tr><td>Contrast (std)</td><td>${s.original.contrast}</td><td>${s.autoencoder.contrast}</td><td>${s.final.contrast}</td></tr>` +
+    (m ? `<tr><td>PSNR (dB)</td><td>${m.original.psnr}</td><td>${m.autoencoder.psnr}</td><td>${m.final.psnr}</td></tr>
+    <tr><td>SSIM</td><td>${m.original.ssim}</td><td>${m.autoencoder.ssim}</td><td>${m.final.ssim}</td></tr>` : '');
+  let note = m ? '' : '<div class="note">Add the matching well-lit image as ground truth to see PSNR and SSIM.</div>';
+  if (data.mode === 'demo') note += '<div class="note">Demo mode: the first stage is a simple denoise and gamma lift, not the trained autoencoder.</div>';
+  $('metricsWrap').innerHTML = note;
+}
+</script>
+</body>
+</html>
