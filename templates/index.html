@@ -46,14 +46,6 @@
        -webkit-background-clip:text; background-clip:text; color:transparent; animation:shine 8s linear infinite; }
   @keyframes shine { to { background-position:200% center; } }
   .sub { margin:2px 0 0; color:var(--muted); font-size:14px; }
-  .badge { margin-left:auto; display:inline-flex; align-items:center; gap:8px; font-size:12.5px; padding:6px 12px; border-radius:99px;
-           border:1px solid var(--line2); background:var(--card); backdrop-filter:blur(10px); color:var(--muted); }
-  .badge .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
-  .badge.demo { color:var(--accent); border-color:rgba(245,185,66,.4); }
-  .badge.demo .dot { background:var(--accent); animation:pulse 2s infinite; }
-  .badge.live { color:var(--ok); border-color:rgba(74,222,128,.4); }
-  .badge.live .dot { background:var(--ok); animation:pulse 2s infinite; }
-  @keyframes pulse { 0% { box-shadow:0 0 0 0 currentColor; } 70% { box-shadow:0 0 0 8px transparent; } 100% { box-shadow:0 0 0 0 transparent; } }
 
   main { max-width:1240px; margin:auto; padding:14px 20px 60px; display:grid; grid-template-columns:360px minmax(0,1fr); gap:18px; align-items:start; }
   @media (max-width:900px) { main { grid-template-columns:minmax(0,1fr); padding:12px 16px 48px; } header { padding:22px 16px 6px; } }
@@ -274,7 +266,6 @@
     <h1>Low-light Image Enhancer</h1>
     <p class="sub">Autoencoder denoising &amp; brightening, refined with histogram matching</p>
   </div>
-  <span id="mode" class="badge"><span class="dot"></span><span id="modeText">Connecting…</span></span>
 </header>
 
 <main>
@@ -409,12 +400,6 @@
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let imageFile = null, data = null, stage = 'final', controller = null, liveTimer = null;
-
-/* ---------- status badge ---------- */
-fetch('/api/status').then(r => r.json()).then(s => {
-  if (s.mode === 'autoencoder') { $('mode').classList.add('live'); $('modeText').textContent = 'Trained autoencoder'; }
-  else { $('mode').classList.add('demo'); $('modeText').textContent = 'Demo mode · no trained weights'; }
-}).catch(() => $('modeText').textContent = 'Server offline');
 
 /* ---------- helpers ---------- */
 function toast(msg) {
