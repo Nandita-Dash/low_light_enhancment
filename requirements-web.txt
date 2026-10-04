@@ -1,0 +1,7 @@
+# Serving the web app in demo mode: no torch, and headless OpenCV (no GUI libraries needed on a server).
+# Install requirements.txt instead to train or to serve trained weights.
+flask>=3.0
+gunicorn
+numpy
+opencv-python-headless
+scikit-image
