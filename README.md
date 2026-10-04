@@ -4,18 +4,23 @@ Web app for project A042. Upload a dark image and get an enhanced one, with a be
 histogram comparison, and PSNR/SSIM when a ground truth image is provided.
 
 ## Examples
-Low-light input (left) and enhanced result (right), demo mode at the default settings. PSNR / SSIM against the
-original well-lit photo:
+Real low-light captures from the LOL test set (left) and the enhanced result (right), demo mode at the default
+settings, scored against the normal-exposure shot of the same scene:
 
 | | |
 |---|---|
-| ![Coffee](static/examples/coffee_compare.jpg) | **Coffee**<br>PSNR 10.4 → 17.6 dB<br>SSIM 0.40 → 0.70 |
-| ![Cat](static/examples/chelsea_compare.jpg) | **Cat**<br>PSNR 10.4 → 13.4 dB<br>SSIM 0.41 → 0.74 |
-| ![Astronaut](static/examples/astronaut_compare.jpg) | **Astronaut**<br>PSNR 9.3 → 19.3 dB<br>SSIM 0.39 → 0.71 |
+| ![Kitchen](static/examples/kitchen_compare.jpg) | **Kitchen**<br>PSNR 5.1 → 17.9 dB<br>SSIM 0.20 → 0.70 |
+| ![Window](static/examples/window_compare.jpg) | **Window**<br>PSNR 5.6 → 17.6 dB<br>SSIM 0.19 → 0.67 |
+| ![Bowling alley](static/examples/bowling_compare.jpg) | **Bowling alley**<br>PSNR 6.8 → 18.9 dB<br>SSIM 0.19 → 0.67 |
 
-These are scikit-image sample photos (public domain / CC0), darkened to simulate an underexposed, noisy capture.
-In the app, click one under "or try an example": it loads the dark photo with the original as ground truth, so the
-PSNR / SSIM panel fills in. Rebuild them with `python make_examples.py`.
+These are three of the better results. Over all 15 test pairs the average is PSNR 7.8 → 15.9 dB and SSIM
+0.19 → 0.60. On the darkest captures demo mode loses most of the colour and smooths heavy noise into flat
+patches; that is the job of the trained autoencoder, which demo mode only stands in for.
+
+In the app, click one under the image box: it loads the low-light capture with its normal-exposure shot as ground
+truth, so PSNR and SSIM appear. Rebuild them with `python make_examples.py --data path/to/LOL`.
+Images: LOL dataset, Wei et al., "Deep Retinex Decomposition for Low-Light Enhancement", BMVC 2018, used for
+research and education.
 
 ## Pipeline
 1. Resize (max side 768 px) and run the convolutional autoencoder (`model.py`) for brightening and denoising.
@@ -63,4 +68,4 @@ pytest
 - `model.py` autoencoder
 - `train.py` training on LOL
 - `templates/index.html` frontend
-- `make_examples.py` builds the example images in `static/examples/`
+- `make_examples.py` builds the example images in `static/examples/` from the LOL test set
