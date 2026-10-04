@@ -70,3 +70,12 @@ def test_matching_does_not_fog(demo_mode, low_light_photo, name):
     L = {k: cv2.cvtColor(res["images"][k], cv2.COLOR_RGB2LAB)[..., 0] for k in ("autoencoder", "final")}
     assert np.percentile(L["final"], 1) <= np.percentile(L["autoencoder"], 1) + 15
     assert L["final"].std() >= 0.9 * L["autoencoder"].std()
+
+
+def test_stage1_cache_reused_only_when_it_applies(demo_mode, dark_image):
+    a = enhance.run_pipeline(dark_image, strength=1.0)["images"]["autoencoder"]
+    b = enhance.run_pipeline(dark_image, strength=0.3, use_matching=False)["images"]["autoencoder"]
+    c = enhance.run_pipeline(dark_image, brightness=0.4)["images"]["autoencoder"]
+    d = enhance.run_pipeline(dark_image[::-1].copy())["images"]["autoencoder"]
+    assert b is a                  # only matching settings changed
+    assert c is not a and d is not a  # brightness (demo stage) or the image changed

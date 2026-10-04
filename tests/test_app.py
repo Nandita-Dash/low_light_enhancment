@@ -53,3 +53,18 @@ def test_bad_image(client):
     r = client.post("/api/enhance", data={"image": (BytesIO(b"not an image"), "x.png")},
                     content_type="multipart/form-data")
     assert r.status_code == 400
+
+
+def test_heic_upload(client, demo_mode):
+    """iPhone photos are HEIC; OpenCV cannot read them, so the Pillow + pillow-heif fallback must.
+    The fixture is 200x120, left half red. (It is a file because encoding HEIC in the same process as OpenCV
+    crashes on macOS; decoding is fine.)"""
+    pytest.importorskip("pillow_heif")
+    from io import BytesIO
+    from pathlib import Path
+
+    heic = (Path(__file__).parent / "data" / "red_left.heic").read_bytes()
+    r = client.post("/api/enhance", data={"image": (BytesIO(heic), "photo.heic"), "matching": "0"},
+                    content_type="multipart/form-data")
+    assert r.status_code == 200
+    assert r.get_json()["stats"]["original"]["brightness"] > 0

@@ -3,5 +3,7 @@
 flask>=3.0
 gunicorn
 numpy
+pillow
+pillow-heif
 opencv-python-headless
 scikit-image
