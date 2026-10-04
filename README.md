@@ -18,18 +18,28 @@ pip install -r requirements.txt
 ```
 python train.py --data path/to/LOL --epochs 100
 ```
+Training uses random 256 px crops at native resolution (the same scale the app runs at) and validates on full images.
 This writes `weights/autoencoder.pt` and `weights/reference_cdf.npy`. A GPU is recommended.
 
 ## Run
 ```
 python app.py
 ```
-Open http://127.0.0.1:5000. Without trained weights the app runs in demo mode so you can still try the interface
+Open http://127.0.0.1:5000. Set `HOST`, `PORT` and `FLASK_DEBUG=1` (local development only) through environment variables. Without trained weights the app runs in demo mode so you can still try the interface
 and histogram matching. The demo first stage works in LAB: noise-adaptive denoising (strength set from the measured
 noise level), a lightness lift to the chosen brightness with an automatic white point, and colour-cast correction.
 
 Controls: histogram matching on/off, matching strength, and target brightness (0.3-0.8, default 0.6).
 With the default reference, matching is applied to lightness only, with a capped contrast gain, and never darkens.
+The default reference (learned or built in) is shifted to the target brightness, so the brightness control also works with
+trained weights. With trained weights it has no effect when matching is off or a reference image is uploaded, and the
+slider is greyed out in those cases.
+
+## Tests
+```
+pip install pytest
+pytest
+```
 
 ## Files
 - `app.py` Flask server and API

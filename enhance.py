@@ -125,14 +125,31 @@ def channel_cdf(img: np.ndarray) -> np.ndarray:
 
 
 def default_reference_cdf(brightness: float = DEFAULT_BRIGHTNESS) -> np.ndarray:
-    """Reference distribution: learned from LOL high-light images if available,
-    otherwise a smooth bell-shaped distribution centred on the target brightness."""
+    """Reference distribution centred on the target brightness: the one learned from LOL high-light
+    images if available (reshaped to the target), otherwise a smooth bell-shaped distribution."""
     if REF_CDF_PATH.exists():
-        return np.load(REF_CDF_PATH)
+        return retarget_cdf(np.load(REF_CDF_PATH), brightness)
     x = np.arange(256)
     pdf = np.exp(-0.5 * ((x - 255 * brightness) / 55.0) ** 2)
     cdf = np.cumsum(pdf) / pdf.sum()
     return np.stack([cdf] * 3, axis=1)
+
+
+def retarget_cdf(cdf: np.ndarray, brightness: float) -> np.ndarray:
+    """Move a reference distribution to the target mean brightness while keeping its shape.
+    Levels are remapped by a gamma curve x -> x^g, with g found by bisection so the mean hits the target."""
+    x = np.arange(256) / 255.0
+    pdf = np.diff(cdf.mean(axis=1), prepend=0.0)
+    lo, hi = np.log(0.05), np.log(20.0)  # search log(g); the mean falls as g grows
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if (pdf * x ** np.exp(mid)).sum() > brightness:
+            lo = mid
+        else:
+            hi = mid
+    g = np.exp((lo + hi) / 2)
+    # CDF of the remapped levels: F'(y) = F(y^(1/g))
+    return np.stack([np.interp(x ** (1 / g), x, cdf[:, c]) for c in range(cdf.shape[1])], axis=1)
 
 
 def match_histogram(src: np.ndarray, ref_cdf: np.ndarray, strength: float = 1.0) -> np.ndarray:
@@ -186,6 +203,9 @@ def compare(a: np.ndarray, b: np.ndarray) -> dict:
 
 def run_pipeline(img, ref_img=None, truth_img=None, use_matching=True, strength=1.0,
                  brightness=DEFAULT_BRIGHTNESS):
+    if not (np.isfinite(strength) and np.isfinite(brightness)):
+        raise ValueError("Strength and brightness must be numbers")
+    strength = float(np.clip(strength, 0.0, 1.0))
     brightness = float(np.clip(brightness, 0.3, 0.8))
     img = limit_size(img)
     using_model = get_model() is not None
