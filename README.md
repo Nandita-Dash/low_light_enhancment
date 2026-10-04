@@ -1,11 +1,39 @@
 # Low-light Image Enhancement using Autoencoder and Histogram Matching
 
-Web app for project A042. Upload a dark image and get an enhanced one, with a before/after slider,
-histogram comparison, and PSNR/SSIM when a ground truth image is provided.
+Project A042. A web app that takes an underexposed photo and returns an enhanced version: a convolutional
+autoencoder brightens and denoises it, then histogram matching refines the tones. The result is shown next to
+the original with a before/after slider, a luminance histogram, and PSNR / SSIM when a ground-truth image is given.
 
-## Examples
-Real low-light captures from the LOL test set (left) and the enhanced result (right), demo mode at the default
-settings, scored against the normal-exposure shot of the same scene:
+![Low-light capture and enhanced result](static/examples/kitchen_compare.jpg)
+
+> **Status:** the trained weights are not included, so the app runs in **demo mode**: a classical
+> denoise-and-lift stage stands in for the autoencoder, and histogram matching runs as normal. `train.py` trains
+> the real model on the LOL dataset (see [Training](#training)).
+
+## Quick start
+Python 3.9 or newer.
+
+```
+pip install -r requirements-web.txt
+python app.py
+```
+
+Open http://127.0.0.1:5000. On macOS, port 5000 is usually taken by AirPlay Receiver; use another port:
+`PORT=5050 python app.py`. Pick one of the examples under the image box to try it straight away.
+
+`requirements-web.txt` is enough for demo mode. Install `requirements.txt` (adds PyTorch) to train or to serve
+trained weights.
+
+## Results
+Demo mode at the default settings on the LOL test set (eval15, 15 genuine low-light captures, each with a
+normal-exposure shot of the same scene). Scores compare against that normal-exposure shot.
+
+| | PSNR (dB) | SSIM |
+|---|---|---|
+| Low-light input | 7.8 | 0.19 |
+| Enhanced, average of all 15 | 15.9 | 0.60 |
+
+Three of the better results, also available as one-click examples in the app:
 
 | | |
 |---|---|
@@ -13,59 +41,99 @@ settings, scored against the normal-exposure shot of the same scene:
 | ![Window](static/examples/window_compare.jpg) | **Window**<br>PSNR 5.6 → 17.6 dB<br>SSIM 0.19 → 0.67 |
 | ![Bowling alley](static/examples/bowling_compare.jpg) | **Bowling alley**<br>PSNR 6.8 → 18.9 dB<br>SSIM 0.19 → 0.67 |
 
-These are three of the better results. Over all 15 test pairs the average is PSNR 7.8 → 15.9 dB and SSIM
-0.19 → 0.60. On the darkest captures demo mode loses most of the colour and smooths heavy noise into flat
-patches; that is the job of the trained autoencoder, which demo mode only stands in for.
+**Limitations of demo mode.** On the darkest captures (average level below about 10/255) it loses most of the
+colour, smooths heavy noise into flat patches, and shows banding on smooth surfaces, because only a few brightness
+levels survive in an 8-bit image that dark. Recovering those is the job of the trained autoencoder.
 
-In the app, click one under the image box: it loads the low-light capture with its normal-exposure shot as ground
-truth, so PSNR and SSIM appear. Rebuild them with `python make_examples.py --data path/to/LOL`.
-Images: LOL dataset, Wei et al., "Deep Retinex Decomposition for Low-Light Enhancement", BMVC 2018, used for
-research and education.
+## How it works
+1. **Resize** so the longest side is at most 768 px.
+2. **Stage 1, brighten and denoise.**
+   - *Trained mode:* the autoencoder in `model.py`, a U-Net style network (encoder 32 → 64 → 128 → 256 channels
+     with skip connections, sigmoid output). Input is padded to a multiple of 8.
+   - *Demo mode:* works in LAB colour space. Non-local-means denoising scaled to the measured noise level, a
+     lightness lift to the target brightness, automatic black and white points, and a colour boost that keeps up
+     with the lift.
+   - Either way, any colour cast the stage adds is removed afterwards.
+3. **Stage 2, histogram matching** (`enhance.py`), against one of:
+   - *A reference image you upload:* each RGB channel is matched, so the result takes on its colours and tones.
+   - *The default reference:* the average distribution of the LOL normal-exposure images
+     (`weights/reference_cdf.npy`, written by `train.py`), or a smooth built-in curve without it. It is shifted to
+     the target brightness and matched on lightness only, so the image keeps its own colours. The contrast gain is
+     capped so leftover noise is not stretched into blotches, the black point is kept, and it never darkens.
+4. **Measurements:** mean brightness and contrast for each stage, plus PSNR and SSIM against the ground truth.
 
-## Pipeline
-1. Resize (max side 768 px) and run the convolutional autoencoder (`model.py`) for brightening and denoising.
-2. Histogram matching (`enhance.py`) per RGB channel against a reference distribution:
-   a reference image you upload, or the average of the LOL high-light images (`weights/reference_cdf.npy`).
-3. Metrics and histograms returned to the browser.
+### Controls
+- **Brightness** (0.3–0.8, default 0.6): target mean lightness. With trained weights it acts through the default
+  reference, so it is greyed out when matching is off or a reference image is uploaded.
+- **Histogram matching** on or off, and **matching strength** (0–1) to blend the matched result with stage 1.
+- **Reference image** (optional): match its colours and tones instead of the default reference.
+- **Ground truth** (optional): the well-lit version of the same scene, to compute PSNR and SSIM.
 
-## Setup
+## Training
+Download the [LOL dataset](https://daooshee.github.io/BMVC2018website/) (485 training and 15 test pairs), then:
+
 ```
 pip install -r requirements.txt
-```
-
-## Train (needs the LOL dataset)
-```
 python train.py --data path/to/LOL --epochs 100
 ```
-Training uses random 256 px crops at native resolution (the same scale the app runs at) and validates on full images.
-This writes `weights/autoencoder.pt` and `weights/reference_cdf.npy`. A GPU is recommended.
 
-## Run
-```
-python app.py
-```
-Open http://127.0.0.1:5000. Set `HOST`, `PORT` and `FLASK_DEBUG=1` (local development only) through environment variables. Without trained weights the app runs in demo mode so you can still try the interface
-and histogram matching. The demo first stage works in LAB: noise-adaptive denoising (strength set from the measured
-noise level), a lightness lift to the chosen brightness with automatic black and white points, a colour boost that
-keeps up with the lift, and colour-cast correction.
+Expected layout: `LOL/our485/{low,high}` and `LOL/eval15/{low,high}`. Training uses random 256 px crops at the
+images' own resolution (the scale the app runs at), L1 + SSIM loss, Adam with a cosine learning-rate schedule, and
+keeps the checkpoint with the best validation PSNR. It writes `weights/autoencoder.pt` and
+`weights/reference_cdf.npy`; the app switches to trained mode on its next start.
 
-Controls: histogram matching on/off, matching strength, and target brightness (0.3-0.8, default 0.6).
-With the default reference, matching is applied to lightness only, with a capped contrast gain, and never darkens.
-The mean brightness it aims for is restored with a gain anchored at the darkest level, so blacks stay black.
-The default reference (learned or built in) is shifted to the target brightness, so the brightness control also works with
-trained weights. With trained weights it has no effect when matching is off or a reference image is uploaded, and the
-slider is greyed out in those cases.
+`train.py` uses an NVIDIA GPU (CUDA) if there is one and the CPU otherwise. Measured on an Apple M5, the CPU needs
+about 7 minutes per epoch (around 11 hours for 100 epochs).
 
-## Tests
+## API
+`POST /api/enhance` (multipart form)
+
+| Field | | |
+|---|---|---|
+| `image` | required | the low-light image |
+| `reference` | optional | image whose colours and tones to match |
+| `truth` | optional | well-lit version, for PSNR / SSIM |
+| `matching` | optional | `1` (default) or `0` |
+| `strength` | optional | 0–1, default 1 |
+| `brightness` | optional | 0.3–0.8, default 0.6 |
+
+Returns JSON with `mode` (`demo` or `autoencoder`), `images` (`original`, `autoencoder`, `final` as PNG data
+URLs), `hist`, `stats` and, with a ground truth, `metrics`. `GET /api/status` returns the mode.
+
+## Deployment
+The `Dockerfile` serves demo mode with gunicorn. It installs `requirements-web.txt` (no PyTorch), so it fits a
+small free instance. It listens on `$PORT` (default 8000):
+
 ```
-pip install pytest
+docker build -t low-light .
+docker run -p 8000:8000 low-light
+```
+
+Running `python app.py` directly is for local use. The Flask debugger is off unless `FLASK_DEBUG=1`, and `HOST` and
+`PORT` set the address.
+
+## Development
+```
+pip install -r requirements.txt pytest
 pytest
 ```
 
-## Files
-- `app.py` Flask server and API
-- `enhance.py` pipeline, histogram matching, metrics
-- `model.py` autoencoder
-- `train.py` training on LOL
-- `templates/index.html` frontend
-- `make_examples.py` builds the example images in `static/examples/` from the LOL test set
+The tests cover the pipeline (demo and trained mode, using a stand-in network) and the API.
+`python make_examples.py --data path/to/LOL` rebuilds the example images and prints scores for all 15 test pairs.
+
+## Project structure
+```
+app.py                Flask server and API
+enhance.py            pipeline: stage 1, colour balance, histogram matching, metrics
+model.py              autoencoder
+train.py              training on LOL
+make_examples.py      builds static/examples/ from the LOL test set
+templates/index.html  frontend
+static/examples/      example low-light captures, ground truths, before/after images
+tests/                pytest suite
+Dockerfile            container for hosting (demo mode)
+```
+
+## Credits
+Example images are from the LOL dataset: Chen Wei, Wenjing Wang, Wenhan Yang and Jiaying Liu, "Deep Retinex
+Decomposition for Low-Light Enhancement", BMVC 2018. Used here for research and education.
