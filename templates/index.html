@@ -290,7 +290,7 @@
 
     <section class="card rise" style="animation-delay:.16s">
       <p class="section-title">2 · Adjust <em>— updates live</em></p>
-      <div class="ctrl" style="margin-top:0">
+      <div class="ctrl" id="brightnessCtrl" style="margin-top:0">
         <div class="ctrl-head"><span>Brightness</span><span class="val" id="bv">0.60</span></div>
         <input id="brightness" class="pretty" type="range" min="0.3" max="0.8" step="0.05" value="0.6">
       </div>
@@ -459,16 +459,22 @@ function bump(el) { el.classList.add('bump'); setTimeout(() => el.classList.remo
   const r = $(id); paintRange(r);
   r.oninput = () => { paintRange(r); $(out).textContent = (+r.value).toFixed(2); bump($(out)); scheduleLive(); };
 });
-const syncMatching = () => $('strengthCtrl').classList.toggle('off', !$('matching').checked);
+// With the trained model, brightness only acts through matching against the default reference
+let mode = 'demo';
+const syncMatching = () => {
+  $('strengthCtrl').classList.toggle('off', !$('matching').checked);
+  $('brightnessCtrl').classList.toggle('off', mode === 'autoencoder' && (!$('matching').checked || !!$('ref').files[0]));
+};
 $('matching').onchange = () => { syncMatching(); scheduleLive(0); };
 syncMatching();
+fetch('/api/status').then(r => r.json()).then(s => { mode = s.mode; syncMatching(); }).catch(() => {});
 
 ['ref', 'truth'].forEach(id => {
   const input = $(id), chip = $(id + 'Chip'), name = $(id + 'Name'), def = name.textContent;
   input.onchange = () => {
     const f = input.files[0];
     chip.classList.toggle('set', !!f); name.textContent = f ? f.name : def;
-    scheduleLive(0);
+    syncMatching(); scheduleLive(0);
   };
   chip.querySelector('.x').onclick = e => { e.preventDefault(); e.stopPropagation(); input.value = ''; input.onchange(); };
 });

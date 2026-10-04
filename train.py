@@ -19,12 +19,11 @@ from torch.utils.data import DataLoader, Dataset
 from enhance import channel_cdf
 from model import AutoEncoder
 
-SIZE = 256
+CROP = 256  # training patch size; images keep their native scale, matching what the app sees
 
 
 def load(path):
-    img = cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB)
-    return cv2.resize(img, (SIZE, SIZE), interpolation=cv2.INTER_AREA)
+    return cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB)
 
 
 class LOL(Dataset):
@@ -39,8 +38,13 @@ class LOL(Dataset):
 
     def __getitem__(self, i):
         lo, hi = self.cache[i]
-        if self.train and np.random.rand() < 0.5:
-            lo, hi = lo[:, ::-1], hi[:, ::-1]
+        if self.train:
+            # Random native-resolution crop plus flip
+            y = np.random.randint(lo.shape[0] - CROP + 1)
+            x = np.random.randint(lo.shape[1] - CROP + 1)
+            lo, hi = lo[y:y + CROP, x:x + CROP], hi[y:y + CROP, x:x + CROP]
+            if np.random.rand() < 0.5:
+                lo, hi = lo[:, ::-1], hi[:, ::-1]
         t = lambda a: torch.from_numpy(np.ascontiguousarray(a)).permute(2, 0, 1).float() / 255.0
         return t(lo), t(hi)
 
@@ -53,6 +57,13 @@ def ssim(a, b, win=7):
     cov = F.avg_pool2d(a * b, win, 1, win // 2) - mu_a * mu_b
     s = ((2 * mu_a * mu_b + c1) * (2 * cov + c2)) / ((mu_a**2 + mu_b**2 + c1) * (va + vb + c2))
     return s.mean()
+
+
+def predict(model, lo):
+    """Run on a full image: pad to a multiple of 8 for the autoencoder, then crop back."""
+    h, w = lo.shape[-2:]
+    out = model(F.pad(lo, (0, (-w) % 8, 0, (-h) % 8), mode="reflect"))
+    return out[..., :h, :w]
 
 
 def psnr(a, b):
@@ -76,8 +87,7 @@ def main():
 
     Path("weights").mkdir(exist_ok=True)
     # Reference histogram: average distribution of the well-lit training targets
-    cdfs = [channel_cdf(cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB))
-            for p in train_ds.high]
+    cdfs = [channel_cdf(hi) for _, hi in train_ds.cache]
     np.save("weights/reference_cdf.npy", np.mean(cdfs, axis=0))
 
     model = AutoEncoder().to(dev)
@@ -100,7 +110,7 @@ def main():
 
         model.eval()
         with torch.no_grad():
-            val = np.mean([psnr(model(l.to(dev)), h.to(dev)) for l, h in val_dl])
+            val = np.mean([psnr(predict(model, l.to(dev)), h.to(dev)) for l, h in val_dl])
         print(f"epoch {ep:3d}  loss {total / len(train_dl):.4f}  val PSNR {val:.2f} dB")
         if val > best:
             best = val
