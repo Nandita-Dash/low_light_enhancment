@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pytest
 
@@ -31,7 +32,7 @@ def test_pipeline_demo_mode(demo_mode, dark_image):
     assert set(res["metrics"]) == {"original", "autoencoder", "final"}
 
 
-@pytest.mark.parametrize("fixture", ["demo_mode", "model_mode"])
+@pytest.mark.parametrize("fixture", ["demo_mode", "underexposing_model"])
 def test_brightness_changes_output(request, fixture, learned_reference, dark_image):
     request.getfixturevalue(fixture)
     dim = enhance.run_pipeline(dark_image, brightness=0.35)["stats"]["final"]["brightness"]
@@ -51,12 +52,21 @@ def test_strength_is_clamped(demo_mode, dark_image):
     over = enhance.run_pipeline(dark_image, strength=5.0)["images"]["final"]
     none = enhance.run_pipeline(dark_image, strength=-3.0)
     assert np.array_equal(full, over)
-    # Strength 0 leaves the first stage as is, up to LAB round-trip rounding
-    diff = np.abs(none["images"]["final"].astype(int) - none["images"]["autoencoder"].astype(int))
-    assert diff.max() <= 3
+    assert np.array_equal(none["images"]["final"], none["images"]["autoencoder"])
 
 
 @pytest.mark.parametrize("kwargs", [{"strength": float("nan")}, {"brightness": float("inf")}])
 def test_non_finite_controls_rejected(demo_mode, dark_image, kwargs):
     with pytest.raises(ValueError):
         enhance.run_pipeline(dark_image, **kwargs)
+
+
+
+@pytest.mark.parametrize("name", ["astronaut", "rocket"])
+def test_matching_does_not_fog(demo_mode, low_light_photo, name):
+    """Regression: matching lifted blacks to grey and flattened contrast (black 11 -> 75 on astronaut,
+    47 -> 108 on rocket), so results looked foggy and washed out."""
+    res = enhance.run_pipeline(low_light_photo(name), brightness=0.5)
+    L = {k: cv2.cvtColor(res["images"][k], cv2.COLOR_RGB2LAB)[..., 0] for k in ("autoencoder", "final")}
+    assert np.percentile(L["final"], 1) <= np.percentile(L["autoencoder"], 1) + 15
+    assert L["final"].std() >= 0.9 * L["autoencoder"].std()

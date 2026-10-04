@@ -37,6 +37,20 @@ def model_mode(monkeypatch):
 
 
 @pytest.fixture
+def underexposing_model(monkeypatch):
+    """Trained-model mode with a stand-in network whose output is still too dark, like a real model on a
+    hard image, so brightness has to come from the matching step."""
+    torch = pytest.importorskip("torch")
+
+    class Dim(torch.nn.Module):
+        def forward(self, x):
+            return x.clamp(0, 1) ** 0.8 * 0.6
+
+    monkeypatch.setattr(enhance, "_model", Dim())
+    monkeypatch.setattr(enhance, "_model_checked", True)
+
+
+@pytest.fixture
 def learned_reference(monkeypatch, tmp_path):
     """A stand-in for weights/reference_cdf.npy: a bright-ish, skewed distribution."""
     x = np.arange(256)
@@ -45,3 +59,18 @@ def learned_reference(monkeypatch, tmp_path):
     path = tmp_path / "reference_cdf.npy"
     np.save(path, np.stack([cdf] * 3, axis=1))
     monkeypatch.setattr(enhance, "REF_CDF_PATH", path)
+
+
+@pytest.fixture
+def low_light_photo():
+    """A real sample photo darkened like an underexposed, noisy capture."""
+    from skimage import data
+
+    def make(name):
+        img = enhance.limit_size(getattr(data, name)()[..., :3].copy(), 384)
+        rng = np.random.default_rng(0)
+        lin = (img / 255.0) ** 2.2 * 0.12
+        lin = rng.poisson(lin * 600) / 600 + rng.normal(0, 0.002, lin.shape)
+        return (np.clip(lin, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)
+
+    return make
