@@ -3,6 +3,20 @@
 Web app for project A042. Upload a dark image and get an enhanced one, with a before/after slider,
 histogram comparison, and PSNR/SSIM when a ground truth image is provided.
 
+## Examples
+Low-light input (left) and enhanced result (right), demo mode at the default settings. PSNR / SSIM against the
+original well-lit photo:
+
+| | |
+|---|---|
+| ![Coffee](static/examples/coffee_compare.jpg) | **Coffee**<br>PSNR 10.4 → 17.6 dB<br>SSIM 0.40 → 0.70 |
+| ![Cat](static/examples/chelsea_compare.jpg) | **Cat**<br>PSNR 10.4 → 13.4 dB<br>SSIM 0.41 → 0.74 |
+| ![Astronaut](static/examples/astronaut_compare.jpg) | **Astronaut**<br>PSNR 9.3 → 19.3 dB<br>SSIM 0.39 → 0.71 |
+
+These are scikit-image sample photos (public domain / CC0), darkened to simulate an underexposed, noisy capture.
+In the app, click one under "or try an example": it loads the dark photo with the original as ground truth, so the
+PSNR / SSIM panel fills in. Rebuild them with `python make_examples.py`.
+
 ## Pipeline
 1. Resize (max side 768 px) and run the convolutional autoencoder (`model.py`) for brightening and denoising.
 2. Histogram matching (`enhance.py`) per RGB channel against a reference distribution:
@@ -49,3 +63,4 @@ pytest
 - `model.py` autoencoder
 - `train.py` training on LOL
 - `templates/index.html` frontend
+- `make_examples.py` builds the example images in `static/examples/`

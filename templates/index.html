@@ -80,6 +80,16 @@
                          background:rgba(0,0,0,.6); border:1px solid var(--line2); opacity:0; transition:opacity .25s; }
   #drop.has:hover .change { opacity:1; }
 
+  /* ---------- examples ---------- */
+  .examples { margin-top:14px; }
+  .ex-label { display:block; font-size:12.5px; color:var(--muted); margin-bottom:8px; }
+  .ex-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .ex { padding:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; cursor:pointer; background:none; aspect-ratio:4/3;
+        transition:border-color .25s, transform .25s var(--ease), opacity .25s; }
+  .ex img { display:block; width:100%; height:100%; object-fit:cover; }
+  .ex:hover, .ex:focus-visible { border-color:var(--accent); transform:translateY(-2px); outline:none; }
+  .ex.loading { opacity:.5; pointer-events:none; }
+
   /* ---------- controls ---------- */
   .ctrl { margin-top:16px; transition:opacity .3s; }
   .ctrl-head { display:flex; justify-content:space-between; align-items:center; font-size:14px; margin-bottom:8px; }
@@ -286,6 +296,14 @@
         </div>
       </div>
       <input id="file" type="file" accept="image/*" hidden>
+      <div class="examples">
+        <span class="ex-label">or try an example</span>
+        <div class="ex-row">
+          <button class="ex" type="button" data-name="coffee" data-label="Coffee"><img src="/static/examples/coffee.jpg" alt="Dark photo of a coffee cup" loading="lazy"></button>
+          <button class="ex" type="button" data-name="chelsea" data-label="Cat"><img src="/static/examples/chelsea.jpg" alt="Dark photo of a cat" loading="lazy"></button>
+          <button class="ex" type="button" data-name="astronaut" data-label="Astronaut"><img src="/static/examples/astronaut.jpg" alt="Dark photo of an astronaut" loading="lazy"></button>
+        </div>
+      </div>
     </section>
 
     <section class="card rise" style="animation-delay:.16s">
@@ -441,9 +459,12 @@ addEventListener('paste', e => {
   const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
   if (item) setFile(item.getAsFile());
 });
-function setFile(f) {
+let exampleTruth = false;  // ground truth was filled in by an example, so it does not belong to other images
+function setFile(f, fromExample = false) {
   if (!f) return;
   if (!f.type.startsWith('image/')) { toast('Please choose an image file.'); return; }
+  if (exampleTruth && !fromExample) { $('truth').value = ''; syncChip('truth'); }
+  exampleTruth = fromExample;
   imageFile = f;
   const url = URL.createObjectURL(f);
   $('thumb').src = url; $('procImg').src = url;
@@ -469,14 +490,38 @@ $('matching').onchange = () => { syncMatching(); scheduleLive(0); };
 syncMatching();
 fetch('/api/status').then(r => r.json()).then(s => { mode = s.mode; syncMatching(); }).catch(() => {});
 
+const chipDefaults = {};
+function syncChip(id) {
+  const f = $(id).files[0];
+  $(id + 'Chip').classList.toggle('set', !!f); $(id + 'Name').textContent = f ? f.name : chipDefaults[id];
+  syncMatching();
+}
 ['ref', 'truth'].forEach(id => {
-  const input = $(id), chip = $(id + 'Chip'), name = $(id + 'Name'), def = name.textContent;
-  input.onchange = () => {
-    const f = input.files[0];
-    chip.classList.toggle('set', !!f); name.textContent = f ? f.name : def;
-    syncMatching(); scheduleLive(0);
-  };
+  const input = $(id), chip = $(id + 'Chip');
+  chipDefaults[id] = $(id + 'Name').textContent;
+  input.onchange = () => { if (id === 'truth') exampleTruth = false; syncChip(id); scheduleLive(0); };
   chip.querySelector('.x').onclick = e => { e.preventDefault(); e.stopPropagation(); input.value = ''; input.onchange(); };
+});
+
+/* ---------- examples: load the dark photo, with its well-lit original as ground truth ---------- */
+async function loadAsFile(url, name) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return new File([await r.blob()], name, { type: 'image/jpeg' });
+}
+document.querySelectorAll('.ex').forEach(btn => btn.onclick = async () => {
+  const { name, label } = btn.dataset;
+  btn.classList.add('loading');
+  try {
+    const [img, truth] = await Promise.all([
+      loadAsFile(`/static/examples/${name}.jpg`, `Example · ${label}.jpg`),
+      loadAsFile(`/static/examples/${name}_truth.jpg`, `${label} (well-lit).jpg`),
+    ]);
+    const dt = new DataTransfer(); dt.items.add(truth);
+    $('truth').files = dt.files; syncChip('truth');
+    setFile(img, true);
+  } catch { toast('Could not load the example.'); }
+  btn.classList.remove('loading');
 });
 
 function scheduleLive(delay = 380) {
