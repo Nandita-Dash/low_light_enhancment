@@ -39,10 +39,7 @@
     .viewer { order:2; padding:14px 16px 18px; border-bottom:1px solid var(--line); }
     #secSettings { order:3; }
     #secOptional { order:4; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
-    .viewer.start { order:0; }   /* before anything is chosen, lead with the showcase */
-    .empty-state { padding:4px 0 0; }
-    .hero-sub { font-size:14px; margin-bottom:16px; }
-    .steps { margin-top:20px; }
+    .viewer.start { order:0; }   /* before anything is chosen, lead with the example */
   }
 
   /* ---------- image input ---------- */
@@ -55,6 +52,8 @@
   #drop .thumb img { display:block; width:100%; height:150px; object-fit:cover; border-radius:3px 3px 0 0; }
   #drop .thumb img.none { display:none; }
   #drop .meta { display:flex; justify-content:space-between; gap:8px; padding:6px 8px; font-size:12px; color:var(--muted); }
+  #drop .meta .x { border:0; background:none; padding:0; font-size:12px; color:var(--muted); cursor:pointer; text-decoration:underline; }
+  #drop .meta .x:hover { color:var(--err); }
   #drop .meta span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
   .for-touch { display:none; }
   @media (hover:none) and (pointer:coarse) { .for-touch { display:inline; } .for-mouse { display:none; } }
@@ -114,43 +113,12 @@
   }
 
   /* ---------- viewer ---------- */
-  .viewer { background:radial-gradient(ellipse 70% 45% at 50% 0%, rgba(217,164,74,.07), transparent 70%); }
-
-  /* start screen: a live before/after of an example, so the page shows what it does before anything is chosen */
-  .empty-state { max-width:760px; margin:0 auto; padding:24px 0 8px; }
-  .eyebrow { display:inline-flex; align-items:center; gap:6px; margin:0 0 10px; font-size:12px; color:var(--accent);
-             letter-spacing:.04em; text-transform:uppercase; font-weight:600; }
-  .eyebrow::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
-  .hero-title { margin:0; color:var(--text); font-size:clamp(24px, 3.4vw, 34px); line-height:1.15; font-weight:700; letter-spacing:-.01em; }
-  .hero-title em { font-style:normal; color:var(--accent); }
-  .hero-sub { margin:10px 0 20px; max-width:560px; color:var(--muted); font-size:15px; }
-  .showcase { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#000;
-              box-shadow:0 18px 50px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.02); }
-  .showcase .stage { width:100%; }
-  .showcase-bar { display:flex; align-items:center; justify-content:space-between; gap:8px 12px; flex-wrap:wrap;
-                  padding:10px 12px; background:var(--panel); border-top:1px solid var(--line); font-size:13px; }
-  .showcase-bar .score { color:var(--muted); font-variant-numeric:tabular-nums; }
-  .showcase-bar .score b { color:var(--text); font-weight:600; }
-  .pills { display:inline-flex; gap:4px; flex-wrap:wrap; }
-  .pills button { border:1px solid var(--line); background:none; border-radius:999px; padding:3px 11px; cursor:pointer;
-                  color:var(--muted); font-size:12.5px; }
-  .pills button:hover { color:var(--text); }
-  .pills button[aria-pressed=true] { background:var(--raised); color:var(--text); border-color:#55555c; }
-  .cta { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
-  .cta .btn { padding:9px 16px; font-size:14px; }
-  .steps { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin:28px 0 0; padding:0; list-style:none; counter-reset:step; }
-  .steps li { padding:14px; border:1px solid var(--line); border-radius:6px; background:rgba(255,255,255,.015); counter-increment:step; }
-  .steps li::before { content:counter(step); display:grid; place-items:center; width:22px; height:22px; margin-bottom:8px; border-radius:50%;
-                      background:rgba(217,164,74,.14); color:var(--accent); font-size:12px; font-weight:700; }
-  .steps b { display:block; margin-bottom:3px; font-weight:600; }
-  .steps span { color:var(--muted); font-size:13px; }
-  @media (max-width:640px) { .steps { grid-template-columns:minmax(0,1fr); } .steps li { display:grid; grid-template-columns:auto 1fr; gap:0 10px; }
-                             .steps li::before { grid-row:span 2; margin:0; } }
-  @media (pointer:coarse) { .pills button { padding:8px 14px; font-size:13.5px; } }
-
-  .mode-badge { margin-left:auto; align-self:center; font-size:11.5px; padding:2px 8px; border-radius:999px;
-                border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
-  .mode-badge.trained { color:var(--accent); border-color:rgba(217,164,74,.5); }
+  /* start screen: a before/after of an example, laid out like the results view */
+  .empty-state { max-width:760px; }
+  .empty-state h2 { margin-bottom:12px; }
+  .empty-state .stage { width:100%; }
+  .caption { margin:8px 0 0; font-size:13px; color:var(--muted); }
+  .mode-badge { margin-left:auto; align-self:center; font-size:12px; color:var(--muted); white-space:nowrap; }
   .processing { display:flex; flex-direction:column; align-items:center; gap:10px; color:var(--muted); }
   .processing img { display:block; max-width:100%; max-height:65vh; opacity:.5; }
   .processing img.none { display:none; }
@@ -227,7 +195,7 @@
         </div>
         <div class="thumb">
           <img id="thumb" alt="Selected image">
-          <div class="meta"><span id="fname"></span><span id="fsize"></span></div>
+          <div class="meta"><span id="fname"></span><span id="fsize"></span><button class="x" id="clearImg" type="button">Remove</button></div>
         </div>
       </div>
       <input id="file" type="file" accept="image/*,.heic,.heif" hidden>
@@ -275,38 +243,26 @@
 
   <section class="viewer start" id="viewer">
     <div class="empty-state" id="emptyState">
-      <p class="eyebrow">Low-light enhancement</p>
-      <h2 class="hero-title">Bring dark photos <em>back into the light</em></h2>
-      <p class="hero-sub">Brightens and denoises an underexposed photo, then refines its tones with histogram matching. Drag across the photo to compare a real low-light capture with the result.</p>
-
-      <div class="showcase">
-        <div class="cmp" id="heroCmp">
-          <div class="stage" id="heroStage">
-            <img id="heroAfter" src="/static/examples/kitchen_enhanced.jpg" alt="Enhanced result" width="600" height="400">
-            <div class="top"><img id="heroBefore" src="/static/examples/kitchen.png" alt="Low-light original" width="600" height="400"></div>
-            <div class="handle"></div>
-            <div class="knob" aria-hidden="true">↔</div>
-            <span class="tag l">Original</span>
-            <span class="tag r">Enhanced</span>
-            <input id="heroSlider" class="hero-range" type="range" min="0" max="100" step="1" value="50" aria-label="Before / after divider for the example">
-          </div>
-        </div>
-        <div class="showcase-bar">
-          <div class="pills" id="heroPills" role="group" aria-label="Example photo"></div>
-          <span class="score" id="heroScore"></span>
+      <h2>Example result <span>(drag across the photo to compare)</span></h2>
+      <div class="toolbar">
+        <div class="tabs" id="heroPills" role="group" aria-label="Example photo"></div>
+      </div>
+      <div class="cmp" id="heroCmp">
+        <div class="stage" id="heroStage">
+          <img id="heroAfter" src="/static/examples/kitchen_enhanced.jpg" alt="Enhanced result" width="600" height="400">
+          <div class="top"><img id="heroBefore" src="/static/examples/kitchen.png" alt="Low-light original" width="600" height="400"></div>
+          <div class="handle"></div>
+          <div class="knob" aria-hidden="true">↔</div>
+          <span class="tag l">Original</span>
+          <span class="tag r">Enhanced</span>
+          <input id="heroSlider" class="hero-range" type="range" min="0" max="100" step="1" value="50" aria-label="Before / after divider for the example">
         </div>
       </div>
-
-      <div class="cta">
-        <button class="btn primary" id="heroChoose" type="button"><span class="for-mouse">Choose your photo</span><span class="for-touch">Choose or take a photo</span></button>
-        <button class="btn" id="heroTry" type="button">Enhance this example</button>
+      <p class="caption" id="heroScore"></p>
+      <div class="actions">
+        <button class="btn primary" id="heroChoose" type="button"><span class="for-mouse">Choose a photo</span><span class="for-touch">Choose or take a photo</span></button>
+        <button class="btn" id="heroTry" type="button">Adjust this example</button>
       </div>
-
-      <ol class="steps">
-        <li><b>Brighten and denoise</b><span>An autoencoder lifts the shadows and cleans up sensor noise.</span></li>
-        <li><b>Match the tones</b><span>Histogram matching pulls the result towards natural brightness, or toward a reference you choose.</span></li>
-        <li><b>Compare and measure</b><span>Slide between before and after, check the histogram, and get PSNR / SSIM against a ground truth.</span></li>
-      </ol>
     </div>
 
     <div class="processing hidden" id="procCard">
@@ -335,6 +291,7 @@
         <a class="btn primary" id="dl" download="enhanced.png">Download</a>
         <button class="btn hidden" id="shareBtn" type="button">Share / Save</button>
         <button class="btn" id="fsBtn" type="button">Full screen</button>
+        <button class="btn" id="newBtn" type="button">New photo</button>
       </div>
 
       <div class="measure">
@@ -395,7 +352,7 @@ async function shrink(f) {
 /* ---------- file input: click or tap, drop (zone or whole page), paste ---------- */
 const drop = $('drop'), file = $('file');
 drop.onclick = () => file.click();
-drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } };
+drop.onkeydown = e => { if (e.target === drop && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); file.click(); } };
 file.onchange = () => { setFile(file.files[0]); file.value = ''; };
 let dragDepth = 0;
 const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
@@ -428,6 +385,22 @@ function setFile(f, fromExample = false) {
   drop.classList.add('has'); $('go').disabled = false;
   run(true);
 }
+
+/* ---------- start over: back to the start screen with no image ---------- */
+function clearImage() {
+  if (controller) controller.abort();
+  controller = null; busy = false; again = false; clearTimeout(liveTimer);
+  if (exampleTruth) { $('truth').value = ''; syncChip('truth'); exampleTruth = false; }
+  imageFile = null; data = null;
+  drop.classList.remove('has'); $('thumb').removeAttribute('src'); $('procImg').removeAttribute('src');
+  $('go').disabled = true; $('goText').textContent = 'Enhance';
+  $('liveChip').classList.remove('show'); $('cmp').classList.remove('updating');
+  $('procCard').classList.add('hidden'); $('results').classList.add('hidden');
+  $('emptyState').classList.remove('hidden'); $('viewer').classList.add('start');
+  scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('clearImg').onclick = e => { e.stopPropagation(); clearImage(); };
+$('newBtn').onclick = () => file.click();
 
 /* ---------- settings (changes re-run automatically once there is a result) ---------- */
 [['strength', 'sv'], ['brightness', 'bv']].forEach(([id, out]) => {
@@ -643,7 +616,7 @@ function showHero(name) {
   $('heroAfter').src = `/static/examples/${name}_enhanced.jpg`;
   $('heroPills').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === name));
   const [a, b] = HERO[name].psnr;
-  $('heroScore').innerHTML = `PSNR <b>${a}</b> → <b>${b} dB</b> vs. the well-lit shot`;
+  $('heroScore').textContent = `A real low-light capture from the LOL test set, at the default settings. PSNR ${a} → ${b} dB against the well-lit shot.`;
 }
 Object.entries(HERO).forEach(([k, v]) => {
   const b = document.createElement('button');
