@@ -6,6 +6,7 @@ train on. Writes, per example, to static/examples/:
   <name>.png          low-light capture (the app loads this when the example is clicked)
   <name>_truth.png    normal-exposure shot, used as ground truth for PSNR / SSIM
   <name>_compare.jpg  low-light capture | enhanced result, for the README
+  <name>_enhanced.jpg enhanced result alone, for the before/after showcase on the app's start screen
 It also prints the scores on every eval15 pair, so the chosen examples can be read against the average.
 
 Run:  python make_examples.py --data path/to/LOL
@@ -51,6 +52,7 @@ def main():
             save(OUT / f"{name}_truth.png", high)
             gap = np.zeros((low.shape[0], 8, 3), np.uint8)
             save(OUT / f"{name}_compare.jpg", np.hstack([low, gap, res["images"]["final"]]), cv2.IMWRITE_JPEG_QUALITY, 90)
+            save(OUT / f"{name}_enhanced.jpg", res["images"]["final"], cv2.IMWRITE_JPEG_QUALITY, 90)
     s = np.mean(scores, axis=0)
     print(f"mean of {len(scores)}: PSNR {s[0]:.2f} -> {s[1]:.2f} dB   SSIM {s[2]:.3f} -> {s[3]:.3f}")
 
