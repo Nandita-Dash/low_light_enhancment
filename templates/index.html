@@ -39,7 +39,10 @@
     .viewer { order:2; padding:14px 16px 18px; border-bottom:1px solid var(--line); }
     #secSettings { order:3; }
     #secOptional { order:4; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
-    .empty-state { padding:20px 0 !important; }
+    .viewer.start { order:0; }   /* before anything is chosen, lead with the showcase */
+    .empty-state { padding:4px 0 0; }
+    .hero-sub { font-size:14px; margin-bottom:16px; }
+    .steps { margin-top:20px; }
   }
 
   /* ---------- image input ---------- */
@@ -111,8 +114,43 @@
   }
 
   /* ---------- viewer ---------- */
-  .empty-state { color:var(--muted); padding:60px 0; text-align:center; }
-  .empty-state p { margin:0 auto; max-width:380px; }
+  .viewer { background:radial-gradient(ellipse 70% 45% at 50% 0%, rgba(217,164,74,.07), transparent 70%); }
+
+  /* start screen: a live before/after of an example, so the page shows what it does before anything is chosen */
+  .empty-state { max-width:760px; margin:0 auto; padding:24px 0 8px; }
+  .eyebrow { display:inline-flex; align-items:center; gap:6px; margin:0 0 10px; font-size:12px; color:var(--accent);
+             letter-spacing:.04em; text-transform:uppercase; font-weight:600; }
+  .eyebrow::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .hero-title { margin:0; color:var(--text); font-size:clamp(24px, 3.4vw, 34px); line-height:1.15; font-weight:700; letter-spacing:-.01em; }
+  .hero-title em { font-style:normal; color:var(--accent); }
+  .hero-sub { margin:10px 0 20px; max-width:560px; color:var(--muted); font-size:15px; }
+  .showcase { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#000;
+              box-shadow:0 18px 50px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.02); }
+  .showcase .stage { width:100%; }
+  .showcase-bar { display:flex; align-items:center; justify-content:space-between; gap:8px 12px; flex-wrap:wrap;
+                  padding:10px 12px; background:var(--panel); border-top:1px solid var(--line); font-size:13px; }
+  .showcase-bar .score { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .showcase-bar .score b { color:var(--text); font-weight:600; }
+  .pills { display:inline-flex; gap:4px; flex-wrap:wrap; }
+  .pills button { border:1px solid var(--line); background:none; border-radius:999px; padding:3px 11px; cursor:pointer;
+                  color:var(--muted); font-size:12.5px; }
+  .pills button:hover { color:var(--text); }
+  .pills button[aria-pressed=true] { background:var(--raised); color:var(--text); border-color:#55555c; }
+  .cta { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .cta .btn { padding:9px 16px; font-size:14px; }
+  .steps { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin:28px 0 0; padding:0; list-style:none; counter-reset:step; }
+  .steps li { padding:14px; border:1px solid var(--line); border-radius:6px; background:rgba(255,255,255,.015); counter-increment:step; }
+  .steps li::before { content:counter(step); display:grid; place-items:center; width:22px; height:22px; margin-bottom:8px; border-radius:50%;
+                      background:rgba(217,164,74,.14); color:var(--accent); font-size:12px; font-weight:700; }
+  .steps b { display:block; margin-bottom:3px; font-weight:600; }
+  .steps span { color:var(--muted); font-size:13px; }
+  @media (max-width:640px) { .steps { grid-template-columns:minmax(0,1fr); } .steps li { display:grid; grid-template-columns:auto 1fr; gap:0 10px; }
+                             .steps li::before { grid-row:span 2; margin:0; } }
+  @media (pointer:coarse) { .pills button { padding:8px 14px; font-size:13.5px; } }
+
+  .mode-badge { margin-left:auto; align-self:center; font-size:11.5px; padding:2px 8px; border-radius:999px;
+                border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .mode-badge.trained { color:var(--accent); border-color:rgba(217,164,74,.5); }
   .processing { display:flex; flex-direction:column; align-items:center; gap:10px; color:var(--muted); }
   .processing img { display:block; max-width:100%; max-height:65vh; opacity:.5; }
   .processing img.none { display:none; }
@@ -137,7 +175,7 @@
                display:grid; place-items:center; background:#fff; color:#111; font-size:13px; font-weight:700; }
   .stage:focus-within .knob { outline:2px solid var(--accent); outline-offset:2px; }
   /* kept for keyboard use (arrow keys); touch and mouse drag the image itself */
-  .cmp #slider { position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; margin:0; pointer-events:none; }
+  .cmp #slider, .cmp .hero-range { position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; margin:0; pointer-events:none; }
   .tag { position:absolute; top:8px; font-size:12px; padding:2px 6px; border-radius:3px; pointer-events:none; background:rgba(0,0,0,.6); }
   .tag.l { left:8px; } .tag.r { right:8px; }
   .actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
@@ -175,6 +213,7 @@
 <header>
   <h1>Low-light image enhancement</h1>
   <p>Autoencoder denoising and brightening, followed by histogram matching</p>
+  <span class="mode-badge hidden" id="modeBadge"></span>
 </header>
 
 <main>
@@ -234,9 +273,40 @@
     </section>
   </aside>
 
-  <section class="viewer">
+  <section class="viewer start" id="viewer">
     <div class="empty-state" id="emptyState">
-      <p>Choose a low-light photo or one of the examples. The result is shown next to the original, with a histogram and quality measurements below.</p>
+      <p class="eyebrow">Low-light enhancement</p>
+      <h2 class="hero-title">Bring dark photos <em>back into the light</em></h2>
+      <p class="hero-sub">Brightens and denoises an underexposed photo, then refines its tones with histogram matching. Drag across the photo to compare a real low-light capture with the result.</p>
+
+      <div class="showcase">
+        <div class="cmp" id="heroCmp">
+          <div class="stage" id="heroStage">
+            <img id="heroAfter" src="/static/examples/kitchen_enhanced.jpg" alt="Enhanced result" width="600" height="400">
+            <div class="top"><img id="heroBefore" src="/static/examples/kitchen.png" alt="Low-light original" width="600" height="400"></div>
+            <div class="handle"></div>
+            <div class="knob" aria-hidden="true">↔</div>
+            <span class="tag l">Original</span>
+            <span class="tag r">Enhanced</span>
+            <input id="heroSlider" class="hero-range" type="range" min="0" max="100" step="1" value="50" aria-label="Before / after divider for the example">
+          </div>
+        </div>
+        <div class="showcase-bar">
+          <div class="pills" id="heroPills" role="group" aria-label="Example photo"></div>
+          <span class="score" id="heroScore"></span>
+        </div>
+      </div>
+
+      <div class="cta">
+        <button class="btn primary" id="heroChoose" type="button"><span class="for-mouse">Choose your photo</span><span class="for-touch">Choose or take a photo</span></button>
+        <button class="btn" id="heroTry" type="button">Enhance this example</button>
+      </div>
+
+      <ol class="steps">
+        <li><b>Brighten and denoise</b><span>An autoencoder lifts the shadows and cleans up sensor noise.</span></li>
+        <li><b>Match the tones</b><span>Histogram matching pulls the result towards natural brightness, or toward a reference you choose.</span></li>
+        <li><b>Compare and measure</b><span>Slide between before and after, check the histogram, and get PSNR / SSIM against a ground truth.</span></li>
+      </ol>
     </div>
 
     <div class="processing hidden" id="procCard">
@@ -371,7 +441,13 @@ const syncMatching = () => {
 };
 $('matching').onchange = () => { syncMatching(); scheduleLive(0); };
 syncMatching();
-fetch('/api/status').then(r => r.json()).then(s => { mode = s.mode; syncMatching(); }).catch(() => {});
+fetch('/api/status').then(r => r.json()).then(s => {
+  mode = s.mode; syncMatching();
+  const b = $('modeBadge'), trained = mode === 'autoencoder';
+  b.textContent = trained ? 'Trained model' : 'Demo mode';
+  b.title = trained ? 'Running the trained autoencoder' : 'No trained weights: a classical denoise and lift stands in for the autoencoder';
+  b.classList.toggle('trained', trained); b.classList.remove('hidden');
+}).catch(() => {});
 
 const chipDefaults = {};
 function syncChip(id) {
@@ -416,7 +492,11 @@ function scheduleLive(delay = 380) {
 /* ---------- enhance request ---------- */
 function showProcessing(on) {
   $('procCard').classList.toggle('hidden', !on);
-  if (on) { $('emptyState').classList.add('hidden'); $('results').classList.add('hidden'); }
+  if (on) {
+    stopSweep();
+    $('emptyState').classList.add('hidden'); $('results').classList.add('hidden'); $('viewer').classList.remove('start');
+    if (matchMedia('(max-width:860px)').matches) $('viewer').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 }
 
 $('go').onclick = () => run(true);
@@ -456,6 +536,7 @@ async function run(fresh) {
     toast(/fetch|network|load failed/i.test(e.message) ? 'Cannot reach the server. Check your connection and try again.' : e.message);
     showProcessing(false);
     $(data ? 'results' : 'emptyState').classList.remove('hidden');
+    if (!data) $('viewer').classList.add('start');
   }
   if (mine !== controller) return;
   busy = false;
@@ -509,39 +590,87 @@ $('shareBtn').onclick = () => {
 };
 
 /* compare: drag anywhere on the image with mouse, finger or pen; arrow keys via the hidden range input */
-const slider = $('slider'), cmp = $('cmp'), stageEl = $('stage');
-function setSplit(v) {
-  slider.value = v;
-  cmp.querySelector('.top').style.clipPath = `inset(0 ${100 - v}% 0 0)`;
-  cmp.querySelector('.handle').style.left = v + '%';
-  cmp.querySelector('.knob').style.left = v + '%';
-  cmp.querySelector('.tag.l').style.opacity = v < 12 ? 0 : 1;
-  cmp.querySelector('.tag.r').style.opacity = v > 88 ? 0 : 1;
-}
-slider.oninput = () => setSplit(+slider.value);
-// A mouse moves the divider straight away. A touch may be the start of a page scroll, so it only moves the
-// divider once it has clearly gone sideways; a mostly vertical touch is left to scroll the page.
-let drag = null;   // null, or { x, y, active }
-const splitAt = e => { const r = stageEl.getBoundingClientRect(); setSplit(Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100))); };
-stageEl.addEventListener('pointerdown', e => {
-  if (e.button > 0) return;
-  const mouse = e.pointerType === 'mouse';
-  drag = { x: e.clientX, y: e.clientY, active: mouse };
-  if (mouse) { stageEl.setPointerCapture(e.pointerId); splitAt(e); }
-});
-stageEl.addEventListener('pointermove', e => {
-  if (!drag) return;
-  if (!drag.active) {
-    const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
-    if (dy > 8 && dy >= dx) { drag = null; return; }   // vertical: a scroll
-    if (dx < 8) return;                                 // not decided yet
-    drag.active = true; stageEl.setPointerCapture(e.pointerId);
+function makeCompare(box, range) {
+  const stageEl = box.querySelector('.stage'), q = sel => box.querySelector(sel);
+  function set(v) {
+    range.value = v;
+    q('.top').style.clipPath = `inset(0 ${100 - v}% 0 0)`;
+    q('.handle').style.left = v + '%';
+    q('.knob').style.left = v + '%';
+    q('.tag.l').style.opacity = v < 12 ? 0 : 1;
+    q('.tag.r').style.opacity = v > 88 ? 0 : 1;
   }
-  splitAt(e);
-});
-['pointerup', 'pointercancel'].forEach(t => stageEl.addEventListener(t, () => { drag = null; }));
+  range.oninput = () => set(+range.value);
+  // A mouse moves the divider straight away. A touch may be the start of a page scroll, so it only moves the
+  // divider once it has clearly gone sideways; a mostly vertical touch is left to scroll the page.
+  let drag = null;   // null, or { x, y, active }
+  const splitAt = e => { const r = stageEl.getBoundingClientRect(); set(Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100))); };
+  stageEl.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    const mouse = e.pointerType === 'mouse';
+    drag = { x: e.clientX, y: e.clientY, active: mouse };
+    if (mouse) { stageEl.setPointerCapture(e.pointerId); splitAt(e); }
+  });
+  stageEl.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.active) {
+      const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+      if (dy > 8 && dy >= dx) { drag = null; return; }   // vertical: a scroll
+      if (dx < 8) return;                                 // not decided yet
+      drag.active = true; stageEl.setPointerCapture(e.pointerId);
+    }
+    splitAt(e);
+  });
+  ['pointerup', 'pointercancel'].forEach(t => stageEl.addEventListener(t, () => { drag = null; }));
+  set(50);
+  return set;
+}
+const slider = $('slider'), cmp = $('cmp'), stageEl = $('stage');
+const setSplit = makeCompare(cmp, slider);
 stageEl.addEventListener('dblclick', () => toggleFull());
-setSplit(50);
+
+/* ---------- start screen: before/after of the bundled examples ---------- */
+const HERO = {
+  kitchen: { label: 'Kitchen', psnr: ['5.1', '18.2'] },
+  window:  { label: 'Window',  psnr: ['5.6', '17.7'] },
+  bowling: { label: 'Bowling', psnr: ['6.8', '19.1'] },
+};
+let heroName = 'kitchen';
+const heroSplit = makeCompare($('heroCmp'), $('heroSlider'));
+function showHero(name) {
+  heroName = name;
+  $('heroBefore').src = `/static/examples/${name}.png`;
+  $('heroAfter').src = `/static/examples/${name}_enhanced.jpg`;
+  $('heroPills').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === name));
+  const [a, b] = HERO[name].psnr;
+  $('heroScore').innerHTML = `PSNR <b>${a}</b> → <b>${b} dB</b> vs. the well-lit shot`;
+}
+Object.entries(HERO).forEach(([k, v]) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.k = k; b.textContent = v.label;
+  b.onclick = () => { stopSweep(); showHero(k); };
+  $('heroPills').appendChild(b);
+});
+showHero(heroName);
+$('heroChoose').onclick = () => file.click();
+$('heroTry').onclick = () => document.querySelector(`.ex[data-name="${heroName}"]`).click();
+
+// One slow sweep of the divider on arrival, so it is obvious the photo can be dragged
+let sweep = 0;
+const stopSweep = () => { cancelAnimationFrame(sweep); sweep = 0; };
+['pointerdown', 'keydown'].forEach(t => $('heroStage').addEventListener(t, stopSweep));
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const go = () => {
+    const t0 = performance.now(), dur = 2600;
+    const tick = now => {
+      const t = Math.min(1, (now - t0) / dur);
+      heroSplit(50 + 32 * Math.sin(t * 2 * Math.PI) * (1 - t * .25) * (t < 1 ? 1 : 0));
+      if (t < 1) sweep = requestAnimationFrame(tick); else sweep = 0;
+    };
+    sweep = requestAnimationFrame(tick);
+  };
+  $('heroBefore').decode().then(() => setTimeout(() => { if (!imageFile) go(); }, 500)).catch(() => {});
+}
 $('imgBottom').addEventListener('load', e => {
   cmp.style.setProperty('--ar', e.target.naturalWidth / e.target.naturalHeight);
   cmp.style.setProperty('--nw', e.target.naturalWidth + 'px');
@@ -556,7 +685,7 @@ function toggleFull() {
 }
 $('fsBtn').onclick = toggleFull; $('fsExit').onclick = toggleFull;
 addEventListener('keydown', e => {
-  if (e.target.matches('aside input') || e.target === slider) return;
+  if (e.target.matches('aside input, .hero-range') || e.target === slider) return;
   if (e.key === 'Escape' && cmp.classList.contains('fs')) cmp.classList.remove('fs');
   if (!data || $('results').classList.contains('hidden')) return;
   if (e.key === 'f' || e.key === 'F') toggleFull();
